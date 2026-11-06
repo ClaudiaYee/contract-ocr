@@ -1,13 +1,10 @@
 name: Audit Windows download with Microsoft Defender
 on:
-  push:
-    paths: ['.github/workflows/audit-windows-download.yml']
   workflow_dispatch:
     inputs:
       source_runs:
         description: 'JSON array of build run IDs whose original ZIPs should be scanned'
         required: true
-        default: '[42132401928,42139311464]'
 permissions:
   contents: read
   actions: read
@@ -18,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        source_run: ${{ fromJSON(inputs.source_runs || '[42132401928,42139311464]') }}
+        source_run: ${{ fromJSON(inputs.source_runs) }}
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -34,9 +31,6 @@ jobs:
           $hash = (Get-FileHash $zip.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash  ContractOCR-Windows-x64.zip" | Set-Content reports/SHA256SUMS.txt
           "Source build: ${{ matrix.source_run }}`nZIP SHA256: $hash" | Tee-Object reports/identity.txt
-          if ('${{ matrix.source_run }}' -eq '42132401928' -and $hash -ne '7c937062b77ba852983fb4843b73ab7059d8518796590e6faed191adc6fdc01b') {
-            throw 'Original v2.14.2 ZIP differs from the uploaded problem package'
-          }
           Expand-Archive $zip.FullName extracted
           Get-AuthenticodeSignature extracted/ContractOCR/ContractOCR.exe |
             Format-List Status,StatusMessage,Path | Out-File reports/signature.txt
