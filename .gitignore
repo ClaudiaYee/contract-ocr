@@ -1,0 +1,8 @@
+ContractOCR_Data/
+__pycache__/
+*.pyc
+build/
+dist/
+*.spec
+*.zip
+models/
