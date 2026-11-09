@@ -6,3 +6,7 @@ dist/
 *.spec
 *.zip
 models/
+.venv-build/
+.venv-models/
+version_info.txt
+packaged-validation.json

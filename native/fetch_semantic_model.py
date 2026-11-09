@@ -1,5 +1,6 @@
 """Build-time download of pinned public weights only. Never run on client documents."""
 import hashlib
+import os
 import json
 from pathlib import Path
 import urllib.request
@@ -13,7 +14,7 @@ FILES = {
 root = Path(__file__).resolve().parent.parent / 'models' / 'semantic_model'
 root.mkdir(parents=True, exist_ok=True)
 for name, (remote, checksum) in FILES.items():
-    url = f'https://huggingface.co/Xenova/bge-small-zh-v1.5/resolve/{REVISION}/{remote}'
+    url = f"{os.environ.get('HF_ENDPOINT', 'https://huggingface.co').rstrip('/')}/Xenova/bge-small-zh-v1.5/resolve/{REVISION}/{remote}"
     data = urllib.request.urlopen(url, timeout=180).read()
     if hashlib.sha256(data).hexdigest() != checksum: raise RuntimeError('Public model checksum mismatch: ' + name)
     (root/name).write_bytes(data)
