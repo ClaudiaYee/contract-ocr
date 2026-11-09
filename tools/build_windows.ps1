@@ -91,6 +91,24 @@ Run $bp $piArgs
 $exe = Join-Path $Root 'dist\ContractOCR\ContractOCR.exe'
 if (-not (Test-Path $exe)) { throw '打包结束但没有找到 dist\ContractOCR\ContractOCR.exe' }
 
+Step '7b/8 替换程序里过旧的 VC++ 运行库'
+# PyInstaller 有时会从 PATH 上的其他软件里收集到旧版 msvcp140.dll（例如 2017 年的 14.12）。
+# 新版 onnxruntime 碰到旧版运行库会直接崩溃（0xc0000005），这里统一换成系统中更新的版本。
+$runtimeNames = 'msvcp140.dll msvcp140_1.dll msvcp140_2.dll msvcp140_atomic_wait.dll msvcp140_codecvt_ids.dll vcruntime140.dll vcruntime140_1.dll concrt140.dll vcomp140.dll'.Split(' ')
+$systemMsvcp = Join-Path $env:WINDIR 'System32\msvcp140.dll'
+if (-not (Test-Path $systemMsvcp) -or (Get-Item $systemMsvcp).VersionInfo.FileVersionRaw -lt [version]'14.40') {
+    throw '系统中的 VC++ 运行库过旧或未安装。请先安装 https://aka.ms/vs/17/release/vc_redist.x64.exe ，再重新运行打包。'
+}
+foreach ($bundled in Get-ChildItem 'dist\ContractOCR' -Recurse -File | Where-Object { $runtimeNames -contains $_.Name.ToLower() }) {
+    $system = Join-Path $env:WINDIR ('System32\' + $bundled.Name)
+    if (-not (Test-Path $system)) { continue }
+    $old = $bundled.VersionInfo.FileVersionRaw; $new = (Get-Item $system).VersionInfo.FileVersionRaw
+    if ($old -lt $new) {
+        Copy-Item $system $bundled.FullName -Force
+        Write-Host "已更新 $($bundled.FullName.Substring($Root.Length + 1))：$old -> $new"
+    }
+}
+
 Step '8/8 自检并压缩'
 if (-not $SkipSmokeTest) {
     Run $bp @('native\smoke_windows.py', $exe)
