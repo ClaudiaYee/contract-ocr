@@ -31,8 +31,11 @@ if ($Mirror) {
 Step '1/8 检查 Python 3.11（64 位）'
 $python = $null
 if (Get-Command py -ErrorAction SilentlyContinue) {
-    & py -3.11 -c "import sys" 2>$null
-    if ($LASTEXITCODE -eq 0) { $python = @('py', '-3.11') }
+    try {
+        $ErrorActionPreference = 'Continue'
+        & py -3.11 -c "import sys" 2>&1 | Out-Null
+        if ($LASTEXITCODE -eq 0) { $python = @('py', '-3.11') }
+    } catch { } finally { $ErrorActionPreference = 'Stop' }
 }
 if (-not $python) {
     if (Get-Command python -ErrorAction SilentlyContinue) {
