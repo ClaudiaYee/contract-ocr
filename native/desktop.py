@@ -652,7 +652,19 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 query = payload.get('query')
                 if not isinstance(query, str) or len(query) > 200:
                     return self.respond(400, {'error': '请输入不超过 200 字的搜索关键词'})
-                return self.respond(200, excel_table.search_master(configured, query))
+                people = payload.get('people', {})
+                eligible = payload.get('eligibleIds')
+                direct = payload.get('directIds', [])
+                related = payload.get('relatedIds', [])
+                if (not isinstance(people, dict)
+                        or not all(key in ('person', 'pic', 'eic') and isinstance(value, str)
+                                   for key, value in people.items())
+                        or not all(isinstance(ids, list) and all(isinstance(i, str) for i in ids)
+                                   for ids in (direct, related, eligible if eligible is not None else []))):
+                    return self.respond(400, {'error': '搜索筛选条件格式不正确'})
+                return self.respond(200, excel_table.search_master(
+                    configured, query, people, set(eligible) if eligible is not None else None,
+                    set(direct), set(related)))
             rows = payload.get('rows')
             if not isinstance(rows, list) or not all(isinstance(row, dict) for row in rows):
                 return self.respond(400, {'error': '表格数据格式不正确'})

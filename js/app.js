@@ -573,9 +573,9 @@ const App = (() => {
     if(!response.ok){let message='本机服务请求失败';try{message=(await response.json()).error||message;}catch{}throw new Error(message);}
     return response;
   }
-  async function searchCloudExcel(query){
+  async function searchCloudExcel(criteria){
     if(!NativeDocuments.available())throw Error('请使用桌面版查询云盘总表。');
-    return (await excelPost('/api/excel/cloud-search',{query})).json();
+    return (await excelPost('/api/excel/cloud-search',criteria)).json();
   }
 
   async function exportExcel(){

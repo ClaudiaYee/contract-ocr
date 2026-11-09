@@ -42,6 +42,12 @@ assert.equal(m.r.length,3);assert(m.h.includes('备注'));assert(m.r.some(r=>r['
 // Search the configured workbook only, and follow a saved path change.
 await p.locator('[data-view="vault-search"]').click();
 assert(!(await p.locator('#demo-searchResults').isVisible()));
+assert(await p.locator('#demo-level1').isVisible());
+assert(await p.locator('#demo-filter-specificTags').isVisible());
+await p.locator('#demo-person').fill('钱七');
+await p.locator('#demo-cards .card').filter({hasText:'广州视睿'}).waitFor();
+await p.locator('#demo-reset').click();
+assert(!(await p.locator('#demo-searchResults').isVisible()));
 await p.locator('#demo-keyword').fill('other');
 const cloudCard=p.locator('#demo-cards .card').filter({hasText:'other'});
 await cloudCard.waitFor();
@@ -54,12 +60,13 @@ await p.locator('#demo-cards .empty').waitFor();
 const otherMaster=path.join(work,'other-master.xlsx');
 pyRun('open('+JSON.stringify(otherMaster)+',"wb").write(e.write_xlsx(e.COLUMNS,[{"\\u9879\\u76ee\\u540d\\u79f0":"other from second master"}]))');
 await p.locator('[data-view="settings"]').click();
+await p.waitForFunction(v=>document.getElementById('cfgCloudExcel').value===v,cloud);
 await p.locator('#cfgCloudExcel').fill(otherMaster);
 await p.locator('#saveCloudExcelBtn').click();
 await p.waitForFunction(()=>document.getElementById('cloudExcelState').textContent.includes('已保存'));
 await p.locator('[data-view="vault-search"]').click();
 await p.locator('#demo-keyword').fill('other');
-await p.locator('#demo-cards .card').filter({hasText:'other from second master'}).waitFor();
+await p.locator('#demo-cards .card').filter({hasText:'other from second master'}).waitFor({timeout:5000}).catch(async error=>{console.error(await p.locator('#demo-count').innerText(),await p.locator('#demo-cards').innerText());throw error;});
 assert.equal(await p.locator('#demo-cards .card').count(),1);
 await p.locator('#demo-keyword').fill('广州视睿');
 await p.locator('#demo-cards .empty').waitFor();

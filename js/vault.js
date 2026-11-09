@@ -11,56 +11,108 @@ let storageMessage='';
 function validSaved(c){return c&&typeof c.name==='string'&&(c.amount===''||(Number.isFinite(Number(c.amount))&&Number(c.amount)>=0))&&['industry','region'].every(k=>c[k].every((v,i)=>!v||c[k].slice(0,i).every(Boolean)));}
 function extendIndustry(path){const[a,b,c]=path;if(!a)return;industry[a]??={};if(b){industry[a][b]??=[];if(c&&!industry[a][b].includes(c))industry[a][b].push(c);}}
 function options(el,items,label){el.replaceChildren(new Option(label,''),...items.map(x=>new Option(x,x)));}
+options($('level1'),Object.keys(industry),'全部一级行业');options($('level2'),[],'全部二级行业');options($('level3'),[],'全部三级行业');
+$('level1').addEventListener('change',()=>{options($('level2'),Object.keys(industry[$('level1').value]||{}),'全部二级行业');$('level2').disabled=!$('level1').value;options($('level3'),[],'全部三级行业');$('level3').disabled=true;render()});
+$('level2').addEventListener('change',()=>{options($('level3'),industry[$('level1').value]?.[$('level2').value]||[],'全部三级行业');$('level3').disabled=!$('level2').value;render()});
+// 多选筛选：组内任一命中，组间同时满足；空数组表示不限。
+const filterState={services:[],specificTags:[],needs:[],systems:[]};
 const regionTree={'华南':{'广东':['深圳','广州','珠海'],'广西':['南宁'],'海南':['海口']},'华东':{'上海':['上海'],'江苏':['南京','苏州'],'浙江':['杭州','宁波'],'山东':['济南','青岛'],'安徽':['合肥'],'福建':['福州','厦门'],'江西':['南昌']},'华北':{'北京':['北京'],'天津':['天津'],'河北':['石家庄'],'山西':['太原'],'内蒙古':['呼和浩特']},'华中':{'湖北':['武汉'],'湖南':['长沙'],'河南':['郑州']},'西南':{'四川':['成都'],'重庆':['重庆'],'云南':['昆明'],'贵州':['贵阳'],'西藏':['拉萨']},'西北':{'陕西':['西安'],'甘肃':['兰州'],'青海':['西宁'],'宁夏':['银川'],'新疆':['乌鲁木齐']},'东北':{'辽宁':['沈阳'],'吉林':['长春'],'黑龙江':['哈尔滨']}};
+// 有方向的参考关系：业务相关，绝不代表服务相同。
+const businessLinks=[
+ {from:['数据咨询','数据核查','数据治理'],to:['数据治理','数据安全','经营分析','数据','对账'],why:'数据质量与管理相关，可参考数据口径、核对或安全管理经验'},
+ {from:['SAP 权限风险','权限风险','权限管理','ITGC'],to:['IT 权限','ITGC','IT 一般控制','职责分离','授权审批'],why:'权限与控制相关，可参考授权、职责分离或 IT 控制方法'},
+ {from:['SOX','上市合规'],to:['内控','财务报告','控制测试'],why:'财务报告合规与内控有关，但不代表已提供 SOX 服务'},
+ {from:['财务转型','业财融合','业财'],to:['预算','成本','收入','经营分析'],why:'业财协同涉及预算、成本或收入流程，可参考相关交付经验'},
+ {from:['风险评估','风险咨询'],to:['内控','供应链','投资','合规'],why:'风险识别与控制设计存在业务关联，具体风险范围仍需核对'},
+ {from:['流程优化'],to:['预算','对账','内控','采购','业财'],why:'涉及业务流程改进，可参考方法，服务范围并不等同'}
+];
+function serviceTags(c){return c.services;}
+function pickerOptions(key){if(key==='services')return serviceOptions;if(key==='specificTags')return [...new Set(contracts.flatMap(c=>c.specificTags))];if(key==='systems')return [...new Set(contracts.flatMap(c=>c.systems))];return [...new Set(['合规','财务转型','流程优化','风险管理','成本管理','数据安全','收入管理',...contracts.flatMap(c=>c.need.split(/[，。；;\n]+/).map(x=>x.trim()).filter(Boolean))])];}
+function pickerSuggestions(key){const q=$('filter-'+key).value.trim().toLowerCase();return pickerOptions(key).filter(v=>!filterState[key].some(x=>x.toLowerCase()===v.toLowerCase())&&v.toLowerCase().includes(q));}
+function drawPicker(key){const root=$('picker-'+key);root.querySelector('.selected-tags').innerHTML=filterState[key].map((v,i)=>`<span class="select-chip">${esc(v)}<button type="button" data-remove="${i}" aria-label="移除${esc(v)}">×</button></span>`).join('');drawPickerMenu(key);}
+function drawPickerMenu(key){const query=$('filter-'+key).value.trim(),values=pickerSuggestions(key);$('menu-'+key).innerHTML=values.map(v=>`<button type="button" role="option" aria-selected="false" data-value="${esc(v)}">${esc(v)}</button>`).join('')+(query&&!pickerOptions(key).some(v=>v.toLowerCase()===query.toLowerCase())?`<button type="button" role="option" aria-selected="false" data-value="${esc(query)}">＋ 添加“${esc(query)}”</button>`:'')+(!values.length&&!query?'<span class="hint">暂无其他选项，可输入新名称</span>':'');}
+function addFilter(key,value){value=value.trim();if(!value)return;if(key==='services'){const known=pickerOptions('services').find(v=>VaultModel.normalizeSearch(ServiceContent.canonicalDomain(v))===VaultModel.normalizeSearch(ServiceContent.canonicalDomain(value)));if(!known){$('filter-'+key).setCustomValidity('请选择领域库中的名称；新业务领域可在本地领域库中添加，ITGC 等活动使用具体服务筛选。');$('filter-'+key).reportValidity();return;}value=known;}$('filter-'+key).setCustomValidity('');if(!filterState[key].some(x=>x.toLowerCase()===value.toLowerCase()))filterState[key].push(value);$('filter-'+key).value='';drawPicker(key);render();}
+function initPickers(){for(const [key,label] of Object.entries({services:'服务领域',specificTags:'具体服务',needs:'客户业务诉求',systems:'涉及系统'})){const root=$('picker-'+key);root.innerHTML=`<div class="selected-tags"></div><div class="picker-entry"><input id="demo-filter-${key}" maxlength="120" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="demo-menu-${key}" aria-label="${label}：输入或多选" placeholder="输入或选择，可多选"><button type="button" class="picker-add" aria-label="添加${label}">＋</button></div><div class="picker-menu" id="demo-menu-${key}" role="listbox" aria-label="${label}可选项" hidden></div>`;const input=$('filter-'+key),menu=$('menu-'+key);const show=()=>{input.setCustomValidity('');drawPickerMenu(key);menu.hidden=false;input.setAttribute('aria-expanded','true');};input.addEventListener('focus',show);input.addEventListener('input',show);input.addEventListener('keydown',e=>{if(e.isComposing)return;if(e.key==='Enter'){e.preventDefault();addFilter(key,input.value);show();}if(e.key==='ArrowDown'){e.preventDefault();show();menu.querySelector('button')?.focus();}if(e.key==='Escape'){menu.hidden=true;input.setAttribute('aria-expanded','false');}});root.addEventListener('click',e=>{const remove=e.target.closest('[data-remove]'),item=e.target.closest('[data-value]');if(remove){filterState[key].splice(Number(remove.dataset.remove),1);drawPicker(key);render();}else if(item){addFilter(key,item.dataset.value);input.focus();}else if(e.target.closest('.picker-add')){addFilter(key,input.value);input.focus();}});menu.addEventListener('keydown',e=>{const buttons=[...menu.querySelectorAll('button')],i=buttons.indexOf(document.activeElement);if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();buttons[(i+(e.key==='ArrowDown'?1:-1)+buttons.length)%buttons.length]?.focus();}if(e.key==='Escape'){input.focus();menu.hidden=true;input.setAttribute('aria-expanded','false');}});drawPicker(key);}document.addEventListener('click',e=>{for(const key of Object.keys(filterState))if(!$('picker-'+key).contains(e.target)){$('menu-'+key).hidden=true;$('filter-'+key).setAttribute('aria-expanded','false');}});}
 function allRegionData(){const tree=JSON.parse(JSON.stringify(regionTree));contracts.forEach(c=>{if(c.region.every(Boolean)){tree[c.region[0]]??={};tree[c.region[0]][c.region[1]]??=[];if(!tree[c.region[0]][c.region[1]].includes(c.region[2]))tree[c.region[0]][c.region[1]].push(c.region[2]);}});return tree;}
+function refreshRegionFilters(){const values=[1,2,3].map(n=>$('region'+n).value),tree=allRegionData();options($('region1'),Object.keys(tree),'全部大区');$('region1').value=values[0];options($('region2'),Object.keys(tree[values[0]]||{}),'全部省份');$('region2').value=values[1];options($('region3'),tree[values[0]]?.[values[1]]||[],'全部城市');$('region3').value=values[2];$('region2').disabled=!$('region1').value;$('region3').disabled=!$('region2').value;}
+function matchContract(c,q){return VaultModel.matchContract(c,q,businessLinks);}
+function filteredMatches(query){const levels=[1,2,3].map(n=>$('level'+n).value),regions=[1,2,3].map(n=>$('region'+n).value),min=$('min').value,max=$('max').value,q=query;const invalid=(min!==''&&Number(min)<0)||(max!==''&&Number(max)<0)||(min!==''&&max!==''&&Number(min)>Number(max));const results=[];if(!invalid)contracts.forEach(c=>{if(!levels.every((v,i)=>!v||c.industry[i]===v)||!regions.every((v,i)=>!v||c.region[i]===v))return;if(filterState.services.length&&!filterState.services.some(t=>VaultModel.matchesDimension(c.services,t,'services')))return;if(filterState.specificTags.length&&!filterState.specificTags.some(t=>VaultModel.matchesDimension(c.specificTags,t,'specificTags')))return;if(filterState.systems.length&&!filterState.systems.some(t=>VaultModel.matchesDimension(c.systems,t,'systems')))return;if(filterState.needs.length&&!filterState.needs.some(t=>VaultModel.matchesDimension(c.needTags,t,'need')))return;if((min!==''&&(c.amount===''||Number(c.amount)<Number(min)))||(max!==''&&(c.amount===''||Number(c.amount)>Number(max))))return;if(['enterpriseSize','businessModel','serviceTerm','deliverables'].some(key=>$(key).value.trim()&&!String(Array.isArray(c[key])?c[key].join('、'):c[key]).toLowerCase().includes($(key).value.trim().toLowerCase())))return;const match=matchContract(c,q);if(match.kind!=='none')results.push({contract:c,...match});});if($('sort').value!=='default')results.sort((a,b)=>$('sort').value==='asc'?a.contract.amount-b.contract.amount:b.contract.amount-a.contract.amount);return {results,invalid,q,excludedCount:!invalid&&q?contracts.filter(c=>matchContract(c,q).kind!=='none').length-results.length:0};}
 function exportFields(row){
  return Object.entries(row).filter(([label])=>label!=='项目名称').map(([label,value])=>
   `<div><span>${esc(label)}</span><strong>${esc(value||'—')}</strong></div>`).join('');
 }
-let searchRows=[], searchTimer, requestId=0;
-function cardHTML(row,index){
+function cardHTML(item){
+ const row=item.row;
  const title=esc(row['项目名称']||'未识别项目');
- return `<button class="card" data-result-index="${index}" aria-label="查看${title}详情"><h3>${title}</h3><div class="facts">${exportFields(row)}</div><div class="card-bottom"><span class="detail-link">查看详情 ↗</span></div></button>`;
+ return `<button class="card" data-id="${item.index}" aria-label="查看${title}详情"><h3>${title}</h3><div class="facts">${exportFields(row)}</div><div class="card-bottom"><span class="detail-link">查看详情 ↗</span></div></button>`;
 }
-function search(delay=0){
- clearTimeout(searchTimer);
+let requestId=0, timer, visibleRows=[];
+function render(){
+ clearTimeout(timer);
  const id=++requestId;
  const query=$('keyword').value.trim();
- searchRows=[];
- $('cards').replaceChildren();
- $('count').textContent=query?'正在查询云盘总表…':'';
- $('searchResults').hidden=!query;
- if(!query)return;
- searchTimer=setTimeout(async()=>{
+ const people=Object.fromEntries(['person','eic','pic'].map(key=>[key,$(key).value.trim()]));
+ const advanced=['level1','level2','level3','region1','region2','region3','min','max','enterpriseSize','businessModel','serviceTerm','deliverables'].some(key=>$(key).value.trim())||Object.values(filterState).some(values=>values.length);
+ const active=!!query||advanced||Object.values(people).some(Boolean);
+ $('searchResults').hidden=!active;
+ visibleRows=[];
+ for(const key of ['cards','relatedCards','summary','count','directCount','relatedCount'])$(key).textContent='';
+ $('relatedNote').textContent='相关匹配根据本机已有合同的业务标签生成。';
+ if(!active)return;
+ const {results:eligible,invalid}=filteredMatches('');
+ $('rangeHint').textContent=invalid?'请输入有效区间：金额不小于 0，最低不大于最高。':'金额区间含边界，可仅填写一端。';
+ if(invalid){$('count').textContent='金额区间需要调整';return;}
+ const matches=query?filteredMatches(query.toLowerCase()).results:[];
+ const directIds=matches.filter(x=>x.kind==='direct').map(x=>x.contract.id);
+ const relatedIds=matches.filter(x=>x.kind==='related').map(x=>x.contract.id);
+ const eligibleIds=advanced?eligible.map(x=>x.contract.id):null;
+ const amounts=new Map(contracts.filter(c=>c.amount!=='').map(c=>[c.id,Number(c.amount)]));
+ const sort=$('sort').value;
+ $('count').textContent='正在查询云盘总表…';
+ timer=setTimeout(async()=>{
   try{
-   const {rows,total}=await hooks.searchCloud(query);
+   const {rows,total}=await hooks.searchCloud({query,people,eligibleIds,directIds,relatedIds});
    if(id!==requestId)return;
-   searchRows=rows;
-   $('count').textContent=total>rows.length?`匹配 ${total} 份，显示前 ${rows.length} 份，请缩小搜索范围`:`${total} 份合同`;
-   $('cards').innerHTML=rows.length?rows.map(cardHTML).join(''):'<div class="empty compact">云盘总表没有匹配的合同。</div>';
-  }catch(error){
-   if(id===requestId)$('count').textContent=error.message;
-  }
- },delay);
+   if(sort!=='default')rows.sort((a,b)=>{
+    const x=amounts.get(a.row['合同ID']),y=amounts.get(b.row['合同ID']);
+    if(x===undefined||y===undefined)return Number(x===undefined)-Number(y===undefined);
+    return (x-y)*(sort==='asc'?1:-1);
+   });
+   visibleRows=rows.map(x=>x.row);
+   const indexed=rows.map((x,index)=>({...x,index}));
+   const direct=indexed.filter(x=>x.kind==='direct'),related=indexed.filter(x=>x.kind==='related');
+   $('count').textContent=total>rows.length?`匹配 ${total} 份，显示前 ${rows.length} 份`:`${total} 份合同`;
+   $('directCount').textContent=`${direct.length} 份`;
+   $('relatedCount').textContent=`${related.length} 份`;
+   $('cards').innerHTML=direct.length?direct.map(cardHTML).join(''):'<div class="empty compact">云盘总表没有精准匹配的合同。</div>';
+   $('relatedCards').innerHTML=related.map(cardHTML).join('');
+  }catch(error){if(id===requestId)$('count').textContent=error.message;}
+ },250);
 }
-$('keyword').addEventListener('input',()=>search(250));
-$('searchForm').onsubmit=e=>{e.preventDefault();search();};
-$('cards').addEventListener('click',e=>{
- const card=e.target.closest('[data-result-index]');
- const row=card&&searchRows[Number(card.dataset.resultIndex)];
+function reset(){[1,2,3].forEach(n=>{$('level'+n).value='';$('region'+n).value='';});options($('level2'),[],'全部二级行业');options($('level3'),[],'全部三级行业');$('level2').disabled=$('level3').disabled=true;['min','max','keyword','person','enterpriseSize','businessModel','serviceTerm','deliverables','eic','pic'].forEach(id=>$(id).value='');for(const key of Object.keys(filterState)){filterState[key]=[];$('filter-'+key).value='';drawPicker(key);$('menu-'+key).hidden=true;$('filter-'+key).setAttribute('aria-expanded','false');}$('sort').value='default';refreshRegionFilters();render();}
+
+$('region1').onchange=()=>{$('region2').value='';$('region3').value='';refreshRegionFilters();render();};
+$('region2').onchange=()=>{$('region3').value='';refreshRegionFilters();render();};
+['level3','region3','sort'].forEach(id=>$(id).addEventListener('change',render));['min','max','keyword','person','enterpriseSize','businessModel','serviceTerm','deliverables','eic','pic'].forEach(id=>$(id).addEventListener('input',render));$('reset').onclick=reset;
+$('searchForm').onsubmit=e=>{e.preventDefault();for(const key of Object.keys(filterState))if($('filter-'+key).value.trim())addFilter(key,$('filter-'+key).value);render();};document.querySelector('.vault-root').querySelectorAll('[data-key]').forEach(b=>b.onclick=()=>{$('keyword').value=b.dataset.key;render();});
+function openCard(e){
+ const card=e.target.closest('[data-id]');
+ const row=card&&visibleRows[Number(card.dataset.id)];
  if(!row)return;
  $('detailTitle').textContent=row['项目名称']||'未识别项目';
  $('vaultDetailBody').innerHTML=`<div class="facts">${exportFields(row)}</div>`;
  $('detail').showModal();
-});
+}
+$('cards').addEventListener('click',openCard);
+$('relatedCards').addEventListener('click',openCard);
 $('close').onclick=()=>$('detail').close();$('detail').addEventListener('click',e=>{if(e.target===$('detail')){const r=$('detail').getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)$('detail').close()}});
 
 // 合同整理页使用独立草稿；只有成功保存才修改检索数据。
-let draft=null,dirty=false,editingTag=null,draftRevision=null;
+let draft=null,dirty=false,editingTag=null,currentPage='search',draftRevision=null;
 const editorGroups={keywords:'原始关键词',services:'服务领域',specificTags:'具体服务',customTags:'自定义 Tag'};
 const copy=x=>JSON.parse(JSON.stringify(x));
 function status(message,error=false){$('saveStatus').textContent=message;$('saveStatus').classList.toggle('error',error);}
-function markDirty(){dirty=true;$('draftState').textContent='● 有未保存修改';status('草稿尚未入库，请保存后再合并到云盘总表。');}
+function markDirty(){dirty=true;$('draftState').textContent='● 有未保存修改';status('草稿尚未保存。保存后可合并到云盘总表。');}
 function refreshContractPicker(){const id=draft?.id;options($('manageContract'),[], '');$('manageContract').replaceChildren(...contracts.map(c=>new Option(c.name,c.id)));if(id)$('manageContract').value=id;}
 function populateEditorIndustry(){options($('editIndustry1'),Object.keys(industry),'请选择一级行业');$('editIndustry1').value=draft.industry[0];options($('editIndustry2'),Object.keys(industry[draft.industry[0]]||{}),'请选择二级行业');$('editIndustry2').value=draft.industry[1];options($('editIndustry3'),industry[draft.industry[0]]?.[draft.industry[1]]||[],'请选择三级行业');$('editIndustry3').value=draft.industry[2];}
 function loadDraft(id){$('industryCustomPanel').hidden=true;[1,2,3].forEach(n=>$('industryCustom'+n).value='');draftRevision=originals.find(c=>c.id===id)?.ocrRevision;draft=copy(contracts.find(c=>c.id===id));dirty=false;editingTag=null;$('manageContract').value=id;for(const [field,key] of Object.entries({editName:'name',editAmount:'amount',editScope:'scope',editNeed:'need',editOriginal:'originalDescription',editEic:'eic',editPic:'pic',editFic:'fic',editEnterpriseSize:'enterpriseSize',editBusinessModel:'businessModel',editServiceTerm:'serviceTerm',editNotes:'notes'}))$(field).value=draft[key];$('editSystems').value=draft.systems.join('、');$('editDeliverables').value=draft.deliverables.join('\n');populateEditorIndustry();[1,2,3].forEach(n=>$('editRegion'+n).value=draft.region[n-1]);refreshEditorRegions();renderEditors();$('draftState').textContent='已载入 · '+draft.id+' · '+ContractScope.resolve(draft).label;status(storageMessage||'编辑内容仅在保存后同步到检索。',!!storageMessage);}
@@ -91,22 +143,22 @@ $('discardDraft').onclick=()=>{if((dirty||pendingInput())&&!confirm('撤销当�
 function mergeValues(key,values){draft[key]=[...new Set([...draft[key],...values])];}
 $('extractKeywords').onclick=()=>{if(!draft)return;const text=ContractScope.category(draft)==='ey-template'?ContractScope.textFor(draft):draft.rawText||$('editOriginal').value.trim();if(!text){status(ContractScope.category(draft)==='ey-template'?'未定位附录一／工作说明书，请先核对识别全文。':'请先识别合同。',true);return;}const analyzed=draft.analysis||ServiceContent.analyze(text);draft.keywords=[...new Set(analyzed.keywords.map(x=>x.label))];draft.keywordsSelectionManual=false;editingTag=null;markDirty();renderEditors();status('已根据'+ContractScope.resolve(draft).label+'提取关键词，其他自定义信息保留。');};
 $('generateTags').onclick=()=>{if(!draft)return;const analyzed=draft.analysis||ServiceContent.analyze(ContractScope.category(draft)==='ey-template'?ContractScope.textFor(draft):draft.rawText||$('editOriginal').value);draft.services=[...new Set(analyzed.serviceDomains.map(x=>x.label))];draft.specificTags=[...new Set(analyzed.services.map(x=>x.label))];draft.domainSelectionManual=false;draft.specificSelectionManual=false;editingTag=null;markDirty();renderEditors();status(ContractScope.category(draft)==='ey-template'&&!ContractScope.textFor(draft)?'未定位附录一／工作说明书，未生成自动Tag；自定义标签和笔记保留。':'已根据'+ContractScope.resolve(draft).label+'重新分类，保存后生效。');};
-function updateSystemOptions(){renderDomainCatalog();$('serviceTagOptions').innerHTML=serviceOptions.map(s=>`<option value="${esc(s)}"></option>`).join('');}
+function updateSystemOptions(){renderDomainCatalog();Object.keys(filterState).forEach(drawPicker);$('serviceTagOptions').innerHTML=pickerOptions('services').map(s=>`<option value="${esc(s)}"></option>`).join('');refreshRegionFilters();}
 function refreshEditorRegions(){const tree=allRegionData(),r=$('editRegion1').value,p=$('editRegion2').value;[Object.keys(tree),Object.keys(tree[r]||{}),tree[r]?.[p]||[]].forEach((items,i)=>$('regionOptions'+(i+1)).innerHTML=items.map(v=>`<option value="${esc(v)}"></option>`).join(''));}
 $('editRegion1').oninput=()=>{$('editRegion2').value='';$('editRegion3').value='';refreshEditorRegions();markDirty();};$('editRegion2').oninput=()=>{$('editRegion3').value='';refreshEditorRegions();markDirty();};
-$('editorForm').onsubmit=async e=>{e.preventDefault();if(!draft||saving)return;if(pendingInput()){status('请先确认或添加正在编辑的标签。',true);return;}const next=copy(draft);next.name=$('editName').value.trim();next.amount=$('editAmount').value===''?'':Number($('editAmount').value);next.industry=[1,2,3].map(n=>$('editIndustry'+n).value);next.systems=[...new Set($('editSystems').value.split(/[,，、\n]+/).map(x=>x.trim()).filter(Boolean))];next.region=[1,2,3].map(n=>$('editRegion'+n).value.trim());for(const[field,key]of Object.entries({editEic:'eic',editPic:'pic',editFic:'fic',editScope:'scope',editNeed:'need',editOriginal:'originalDescription',editEnterpriseSize:'enterpriseSize',editBusinessModel:'businessModel',editServiceTerm:'serviceTerm',editNotes:'notes'}))next[key]=$(field).value.trim();next.deliverables=$('editDeliverables').value.split(/\n/).map(x=>x.trim()).filter(Boolean);if(!validSaved(next)||!next.name){status('请填写合同名称、有效金额，并按顺序填写行业与区域层级。',true);return;}saving=true;$('editorForm').querySelectorAll('input,select,textarea,button').forEach(el=>el.disabled=true);try{const all=await Storage.getAllContracts(),latest=all.find(c=>c.id===next.id);if(!latest)throw Error('合同已被删除，请重新选择');if(latest.ocrRevision!==draftRevision)throw Error('识别结果已更新，请重新载入合同后保存');await Storage.updateContract(VaultModel.update(latest,next));dirty=false;editingTag=null;originals=await hooks.saved();contracts=originals.map(project);refreshContractPicker();updateSystemOptions();loadDraft(next.id);$('draftState').textContent='✓ 已保存 · '+new Date().toLocaleTimeString('zh-CN');status('保存成功：已更新本地合同库，可合并到云盘总表。');}catch(err){status('保存失败：'+err.message+'；输入已保留。',true);}finally{saving=false;$('editorForm').querySelectorAll('input,select,textarea,button').forEach(el=>el.disabled=false);}};
+$('editorForm').onsubmit=async e=>{e.preventDefault();if(!draft||saving)return;if(pendingInput()){status('请先确认或添加正在编辑的标签。',true);return;}const next=copy(draft);next.name=$('editName').value.trim();next.amount=$('editAmount').value===''?'':Number($('editAmount').value);next.industry=[1,2,3].map(n=>$('editIndustry'+n).value);next.systems=[...new Set($('editSystems').value.split(/[,，、\n]+/).map(x=>x.trim()).filter(Boolean))];next.region=[1,2,3].map(n=>$('editRegion'+n).value.trim());for(const[field,key]of Object.entries({editEic:'eic',editPic:'pic',editFic:'fic',editScope:'scope',editNeed:'need',editOriginal:'originalDescription',editEnterpriseSize:'enterpriseSize',editBusinessModel:'businessModel',editServiceTerm:'serviceTerm',editNotes:'notes'}))next[key]=$(field).value.trim();next.deliverables=$('editDeliverables').value.split(/\n/).map(x=>x.trim()).filter(Boolean);if(!validSaved(next)||!next.name){status('请填写合同名称、有效金额，并按顺序填写行业与区域层级。',true);return;}saving=true;$('editorForm').querySelectorAll('input,select,textarea,button').forEach(el=>el.disabled=true);try{const all=await Storage.getAllContracts(),latest=all.find(c=>c.id===next.id);if(!latest)throw Error('合同已被删除，请重新选择');if(latest.ocrRevision!==draftRevision)throw Error('识别结果已更新，请重新载入合同后保存');await Storage.updateContract(VaultModel.update(latest,next));dirty=false;editingTag=null;originals=await hooks.saved();contracts=originals.map(project);refreshContractPicker();updateSystemOptions();render();loadDraft(next.id);$('draftState').textContent='✓ 已保存 · '+new Date().toLocaleTimeString('zh-CN');status('保存成功：已更新本地合同库，可合并到云盘总表。');}catch(err){status('保存失败：'+err.message+'；输入已保留。',true);}finally{saving=false;$('editorForm').querySelectorAll('input,select,textarea,button').forEach(el=>el.disabled=false);}};
 function showPage(page){hooks.navigate('vault-'+page);}
 $('goSearch').onclick=()=>showPage('search');
 function renderDomainCatalog(){const rows=DomainCatalog.list();$('domainList').innerHTML=rows.map(x=>`<div class="domain-entry"><strong>${esc(x.name)}</strong><span>${x.contractIds.length} 份合同${x.aliases.length?' · 别名：'+x.aliases.map(esc).join('、'):''}</span></div>`).join('');}
-$('saveDomain').onclick=async()=>{const button=$('saveDomain');button.disabled=true;try{await DomainCatalog.define($('domainName').value.trim(),$('domainAliases').value.split(/[、,，;；]/).map(x=>x.trim()).filter(Boolean));$('domainStatus').textContent='已保存，今后合同会使用此领域及别名匹配';$('domainName').value='';$('domainAliases').value='';originals=await hooks.saved();contracts=originals.map(project);updateSystemOptions();}catch(e){$('domainStatus').textContent='保存失败：'+e.message;}finally{button.disabled=false;}};
-refreshContractPicker();updateSystemOptions();
+$('saveDomain').onclick=async()=>{const button=$('saveDomain');button.disabled=true;try{await DomainCatalog.define($('domainName').value.trim(),$('domainAliases').value.split(/[、,，;；]/).map(x=>x.trim()).filter(Boolean));$('domainStatus').textContent='已保存，今后合同会使用此领域及别名匹配';$('domainName').value='';$('domainAliases').value='';originals=await hooks.saved();contracts=originals.map(project);updateSystemOptions();render();}catch(e){$('domainStatus').textContent='保存失败：'+e.message;}finally{button.disabled=false;}};
+initPickers();refreshContractPicker();updateSystemOptions();render();
 $('customIndustry').onclick=()=>{$('industryCustomPanel').hidden=!$('industryCustomPanel').hidden;};
 $('applyIndustry').onclick=()=>{const path=[1,2,3].map(i=>$('industryCustom'+i).value.trim());if(!path[0]||path.some((v,i)=>v&&path.slice(0,i).some(x=>!x))){status('请按顺序填写行业分类。',true);return;}extendIndustry(path);draft.industry=path;populateEditorIndustry();$('industryCustomPanel').hidden=true;markDirty();};
 function project(c){const p=VaultModel.project(c);p.industry=[0,1,2].map(i=>p.industry[i]||'');p.region=[0,1,2].map(i=>p.region[i]||'');p.content=c.content||p.scope;return p;}
 function canLeave(){if(saving)return false;if(!(dirty||pendingInput()))return true;if(!confirm('当前有未保存的整理内容，是否放弃修改？'))return false;dirty=false;editingTag=null;if(contracts.some(c=>c.id===draft?.id))loadDraft(draft.id);else draft=null;return true;}
-function sync(data,page){originals=data;contracts=data.map(project);contracts.forEach(c=>extendIndustry(c.industry));refreshContractPicker();updateSystemOptions();$('emptyManage').hidden=!!contracts.length;$('editorForm').hidden=!contracts.length;$('manageContract').disabled=!contracts.length;if(page==='manage'&&!(dirty||saving)){if(contracts.length)loadDraft(contracts.find(c=>c.id===draft?.id)?.id||contracts[0].id);else draft=null;}else if(page==='manage'&&dirty)status('合同库已更新，当前未保存的修改已保留。');}
+function sync(data,page){originals=data;contracts=data.map(project);currentPage=page;contracts.forEach(c=>extendIndustry(c.industry));const current=$('level1').value;options($('level1'),Object.keys(industry),'全部一级行业');$('level1').value=current;refreshContractPicker();updateSystemOptions();render();$('emptyManage').hidden=!!contracts.length;$('editorForm').hidden=!contracts.length;$('manageContract').disabled=!contracts.length;if(page==='manage'&&!(dirty||saving)){if(contracts.length)loadDraft(contracts.find(c=>c.id===draft?.id)?.id||contracts[0].id);else draft=null;}else if(page==='manage'&&dirty)status('合同库已更新，当前未保存的修改已保留。');}
 window.addEventListener('beforeunload',e=>{if(dirty||pendingInput()){e.preventDefault();e.returnValue='';}});
-return {render:(data,page)=>{sync(data,page);if(page==='search')search();},refresh:sync,canLeave,selectContract:id=>{if(contracts.some(c=>c.id===id)){loadDraft(id);return true;}return false;}};
+return {render:sync,refresh:sync,canLeave,selectContract:id=>{if(contracts.some(c=>c.id===id)){loadDraft(id);return true;}return false;}};
 }
 return {init,render:(data,page)=>api.render(data,page),refresh:(data,page)=>api.refresh(data,page),canLeave:()=>api?api.canLeave():true,selectContract:id=>api?api.selectContract(id):false};
 })();

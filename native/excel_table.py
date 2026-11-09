@@ -225,12 +225,13 @@ def master_path(configured: str) -> Path:
     raise ExcelError('路径需要是已存在的文件夹，或以 .xlsx 结尾的文件：' + str(path))
 
 
-def search_master(configured: str, query: str) -> dict:
+def search_master(configured: str, query: str, people: dict, eligible_ids: set | None,
+                  direct_ids: set, related_ids: set) -> dict:
     def normalize(text):
         return unicodedata.normalize('NFKC', text).casefold()
 
     terms = normalize(query).split()
-    if not terms:
+    if not terms and not any(people.values()) and eligible_ids is None:
         return {'rows': [], 'total': 0}
     path = master_path(configured)
     try:
@@ -244,11 +245,21 @@ def search_master(configured: str, query: str) -> dict:
     total = 0
     for row in rows:
         public_row = {column: row.get(column, '') for column in COLUMNS}
+        identifier = public_row[ID_COLUMN]
+        if eligible_ids is not None and identifier not in eligible_ids:
+            continue
+        if any(normalize(people.get(role.lower(), '')) not in normalize(public_row[role])
+               for role in ('PIC', 'EIC')):
+            continue
+        person = normalize(people.get('person', ''))
+        if person and not any(person in normalize(public_row[role]) for role in ('PIC', 'EIC', 'FIC')):
+            continue
         fields = [normalize(value) for value in public_row.values()]
-        if all(any(term in field for field in fields) for term in terms):
+        direct = identifier in direct_ids or all(any(term in field for field in fields) for term in terms)
+        if direct or identifier in related_ids:
             total += 1
             if len(matches) < 100:
-                matches.append(public_row)
+                matches.append({'row': public_row, 'kind': 'direct' if direct else 'related'})
     return {'rows': matches, 'total': total}
 
 

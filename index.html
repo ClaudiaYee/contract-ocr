@@ -414,18 +414,24 @@
           </div>
         </div>
       </section>
-<div class="vault-root"><section class="view" id="view-vault-search"><section id="demo-searchPage">
-<div class="view-header"><div><h2>合同检索</h2><p>搜索设置中指定的云盘 Excel 总表。</p></div></div>
-<div class="panel search-panel">
-  <form id="demo-searchForm"><div class="search-row"><input type="search" id="demo-keyword" maxlength="200" placeholder="输入合同名称、关键词或负责人" aria-label="搜索关键词"><button class="primary" type="submit">检索合同 →</button></div></form>
-</div>
-<div id="demo-searchResults" hidden>
-  <div class="results-header"><h2>合同搜索结果</h2><span id="demo-count" role="status"></span></div>
-  <div class="cards" id="demo-cards"></div>
-</div>
-</section></section><section class="view" id="view-vault-manage"><section id="demo-managePage" aria-label="合同整理与标签管理">
+<div class="vault-root"><section class="view" id="view-vault-search"><section id="demo-searchPage"><div class="view-header"><div><h2>合同检索</h2><p>搜索设置中指定的云盘 Excel 总表。行业、服务等高级筛选使用本机同一合同 ID 的资料。</p></div></div>
+<div class="workspace">
+<aside class="panel" aria-label="合同筛选"><div class="panel-title"><span class="step">01</span><h2>筛选条件</h2><button class="text-btn" id="demo-reset">重置全部</button></div>
+<div class="field"><label for="demo-level1">客户行业<span class="optional">三级联动</span></label><div class="industry"><select id="demo-level1" aria-label="一级行业"></select><select id="demo-level2" aria-label="二级行业" disabled></select><select id="demo-level3" aria-label="三级行业" disabled></select></div></div>
+<div class="field"><div class="field-title">服务领域<span class="optional">自动积累，可扩展</span></div><div class="tag-picker" id="demo-picker-services"></div></div><details class="field domain-catalog"><summary>本地服务领域库</summary><p class="hint">识别合同后自动积累；可补充领域及别名。具体活动与行业保持独立。</p><div id="demo-domainList"></div><label for="demo-domainName">领域名称</label><input id="demo-domainName" placeholder="例如：云治理与合规"><label for="demo-domainAliases">同义表达（选填）</label><input id="demo-domainAliases" placeholder="多个表达用顿号分隔"><button type="button" class="secondary" id="demo-saveDomain">保存领域</button><p class="hint" id="demo-domainStatus" role="status"></p></details>
+<div class="field"><div class="field-title">具体服务<span class="optional">按实际服务内容筛选</span></div><div class="tag-picker" id="demo-picker-specificTags"></div></div>
+<div class="field"><div class="field-title">客户业务诉求<span class="optional">多选或自定义</span></div><div class="tag-picker" id="demo-picker-needs"></div></div>
+<div class="field"><div class="field-title">涉及系统<span class="optional">多选或自定义</span></div><div class="tag-picker" id="demo-picker-systems"></div></div>
+<div class="field"><label for="demo-region1">项目所属区域<span class="optional">大区 / 省份 / 城市</span></label><div class="industry"><select id="demo-region1" aria-label="筛选大区"></select><select id="demo-region2" aria-label="筛选省份" disabled></select><select id="demo-region3" aria-label="筛选城市" disabled></select></div></div>
+<div class="field"><label for="demo-person">PIC / EIC / FIC 姓名</label><input id="demo-person" placeholder="输入任一负责人的姓名"></div>
+<div class="field"><label for="demo-min">合同金额区间<span class="optional">万元</span></label><div class="range"><input id="demo-min" type="number" min="0" placeholder="最低" aria-label="最低金额（万元）"><span>—</span><input id="demo-max" type="number" min="0" placeholder="最高" aria-label="最高金额（万元）"></div><p class="hint" id="demo-rangeHint">金额区间含边界，可仅填写一端。</p></div>
+<details class="field"><summary>更多筛选：企业特征、交付及负责人</summary><div class="field"><label for="demo-enterpriseSize">企业规模</label><input id="demo-enterpriseSize"></div><div class="field"><label for="demo-businessModel">业务模式</label><input id="demo-businessModel"></div><div class="field"><label for="demo-serviceTerm">服务期限 / 项目周期</label><input id="demo-serviceTerm"></div><div class="field"><label for="demo-deliverables">交付成果</label><input id="demo-deliverables"></div><div class="field"><label for="demo-eic">EIC 姓名</label><input id="demo-eic"></div><div class="field"><label for="demo-pic">PIC 姓名</label><input id="demo-pic"></div></details><p class="hint" style="border-top:1px solid var(--line);padding-top:17px;margin-top:23px">未选择即不限。输入后按 Enter 或点 ＋ 添加；同一组多选满足任一项，各组条件同时满足。</p>
+</aside>
+<section class="right" aria-label="合同检索与结果"><div class="panel search-panel"><div class="panel-title"><span class="step">02</span><h2>关键词检索</h2></div><form id="demo-searchForm"><div class="search-row"><input id="demo-keyword" placeholder="输入原文、关键词、Tag 或 PIC / EIC / FIC 姓名" aria-label="自定义关键词"><button class="primary" type="submit">检索合同 →</button></div></form><p class="hint">一次输入，同时查询精准与相关结果。精准为完整输入短语直接命中；相关基于预设业务关系，均需满足左侧筛选。</p><div class="suggestions"><span>试试搜索</span><button data-key="SOX">SOX</button><button data-key="财务转型">财务转型</button><button data-key="风险评估">风险评估</button><button data-key="流程优化">流程优化</button></div></div>
+<div id="demo-searchResults" hidden><div class="results-header"><h2>合同搜索结果<span class="count" id="demo-count" aria-live="polite"></span></h2><select id="demo-sort" aria-label="结果排序"><option value="default">默认排序</option><option value="desc">金额从高到低</option><option value="asc">金额从低到高</option></select></div><div class="summary" id="demo-summary"></div><section aria-labelledby="demo-directTitle"><div class="match-heading"><h3 id="demo-directTitle">A. 精准匹配</h3><span id="demo-directCount"></span></div><div class="cards" id="demo-cards"></div></section><section class="related-section" aria-labelledby="demo-relatedTitle"><div class="match-heading"><h3 id="demo-relatedTitle">B. 相关匹配</h3><span id="demo-relatedCount"></span></div><p class="hint" id="demo-relatedNote"></p><div class="cards" id="demo-relatedCards"></div></section></div></section>
+</div></section></section><section class="view" id="view-vault-manage"><section id="demo-managePage" aria-label="合同整理与标签管理">
 <div class="view-header"><div><h2>合同整理与标签管理</h2><p>整理本机合同的关键词及标签，合并到云盘总表后可检索。</p></div></div>
-<details class="field domain-catalog"><summary>本地服务领域库</summary><p class="hint">识别合同后自动积累；可补充领域及别名。具体活动与行业保持独立。</p><div id="demo-domainList"></div><label for="demo-domainName">领域名称</label><input id="demo-domainName" placeholder="例如：云治理与合规"><label for="demo-domainAliases">同义表达（选填）</label><input id="demo-domainAliases" placeholder="多个表达用顿号分隔"><button type="button" class="secondary" id="demo-saveDomain">保存领域</button><p class="hint" id="demo-domainStatus" role="status"></p></details>
+
 <div class="manage-heading"><label for="demo-manageContract">选择历史合同</label><select id="demo-manageContract"></select><span class="save-status" id="demo-draftState">已载入</span></div>
 <div id="demo-emptyManage" class="panel" hidden>上传识别合同后，即可在这里整理。</div><form id="demo-editorForm"><div class="editor-grid">
 <section class="panel editor-panel basic-panel"><div class="panel-title"><span class="step">01</span><h2>合同基本信息</h2></div><div class="basic-grid">
@@ -536,7 +542,7 @@
   <script src="js/business-analysis.js?v=2.14.9"></script>
   <script src="js/domain-catalog.js?v=2.14.9"></script>
   <script src="js/vault-model.js?v=2.14.9"></script>
-  <script src="js/vault.js?v=2.14.9-cloud-search"></script>
-  <script src="js/app.js?v=2.14.9-cloud-search"></script>
+  <script src="js/vault.js?v=2.14.9-cloud-filters"></script>
+  <script src="js/app.js?v=2.14.9-cloud-filters"></script>
 </body>
 </html>
