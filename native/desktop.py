@@ -609,7 +609,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             if 0 < length <= 1024: self.rfile.read(length)
             result = cancel_job(parsed.path.split('/')[3])
             return self.respond(200 if result is not None else 404, result or {'error': 'Job not found'})
-        if parsed.path in ['/api/excel/export', '/api/excel/parse', '/api/excel/cloud-merge']:
+        if parsed.path in ['/api/excel/export', '/api/excel/parse', '/api/excel/cloud-merge', '/api/excel/cloud-search']:
             return self.excel(parsed.path)
         if parsed.path in ['/api/jobs', '/api/contracts', '/api/config', '/api/semantic', '/api/analysis', '/api/business-analysis']:
             return self.mutate(parsed.path)
@@ -646,7 +646,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             if path == '/api/excel/parse':
                 headers, rows = excel_table.read_xlsx(data)
                 return self.respond(200, {'headers': headers, 'rows': rows})
-            rows = json.loads(data).get('rows')
+            payload = json.loads(data)
+            configured = ((get_record('config', 'cloudExcel') or {}).get('value') or {}).get('path', '')
+            if path == '/api/excel/cloud-search':
+                query = payload.get('query')
+                if not isinstance(query, str) or len(query) > 200:
+                    return self.respond(400, {'error': '请输入不超过 200 字的搜索关键词'})
+                return self.respond(200, excel_table.search_master(configured, query))
+            rows = payload.get('rows')
             if not isinstance(rows, list) or not all(isinstance(row, dict) for row in rows):
                 return self.respond(400, {'error': '表格数据格式不正确'})
             if path == '/api/excel/export':
@@ -658,7 +665,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(body)
                 return None
-            configured = ((get_record('config', 'cloudExcel') or {}).get('value') or {}).get('path', '')
             with EXCEL_LOCK:
                 return self.respond(200, excel_table.merge_into_master(configured, rows))
         except excel_table.ExcelError as error:

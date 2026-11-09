@@ -61,7 +61,7 @@ const App = (() => {
       stage('loadContracts');await loadContracts();
       stage('bindEvents');bindEvents();
       window.addEventListener('business-analysis-updated',async()=>{try{await loadContracts();watchAnalysis();const badge=document.getElementById('analysisState');if(badge&&!document.getElementById('detailModal').hidden&&!fullTextDraft&&!reviewDraft?.dirty()){const top=document.getElementById('detailBody').scrollTop;openDetailModal(badge.dataset.contractId);document.getElementById('detailBody').scrollTop=top;}}catch(e){console.warn(e.message);}});
-      Vault.init({exportRow: contract => excelRows([contract])[0], navigate: switchView, saved: loadContracts});
+      Vault.init({searchCloud: searchCloudExcel, navigate: switchView, saved: loadContracts});
       stage('loadConfig');await loadConfigToUI();
       stage('recoverJobs');await recoverNativeJobs();
       stage('keywordPool');if (typeof KeywordPool !== 'undefined') { KeywordPool.bind(); await KeywordPool.load(); }
@@ -573,6 +573,11 @@ const App = (() => {
     if(!response.ok){let message='本机服务请求失败';try{message=(await response.json()).error||message;}catch{}throw new Error(message);}
     return response;
   }
+  async function searchCloudExcel(query){
+    if(!NativeDocuments.available())throw Error('请使用桌面版查询云盘总表。');
+    return (await excelPost('/api/excel/cloud-search',{query})).json();
+  }
+
   async function exportExcel(){
     if(needDesktop())return;
     const list=listFiltered(document.getElementById('searchInput').value.trim().toLowerCase());

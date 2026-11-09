@@ -39,6 +39,32 @@ pyRun('h,r=e.read_xlsx(open('+JSON.stringify(master)+',"rb").read());h.append("\
 await p.locator('#cloudMergeBtn').click();await toast(p,'更新 2 行');
 const m=JSON.parse(pyRun('h,r=e.read_xlsx(open('+JSON.stringify(master)+',"rb").read());sys.stdout.buffer.write(json.dumps({"h":h,"r":r}).encode())'));console.log(m.h,m.r.map(r=>[r['项目名称'],r['FIC'],r['备注']]));
 assert.equal(m.r.length,3);assert(m.h.includes('备注'));assert(m.r.some(r=>r['备注']==='手填'));assert(fs.readdirSync(cloud).some(f=>f.includes('备份')));
+// Search the configured workbook only, and follow a saved path change.
+await p.locator('[data-view="vault-search"]').click();
+assert(!(await p.locator('#demo-searchResults').isVisible()));
+await p.locator('#demo-keyword').fill('other');
+const cloudCard=p.locator('#demo-cards .card').filter({hasText:'other'});
+await cloudCard.waitFor();
+await cloudCard.click();
+assert.deepEqual(await p.locator('#demo-vaultDetailBody .facts span').allTextContents(),
+ ['甲方','乙方','签约时间','原始关键词','PIC','EIC','FIC','来源文件','合同ID']);
+await p.locator('#demo-close').click();
+await p.locator('#demo-keyword').fill('手填');
+await p.locator('#demo-cards .empty').waitFor();
+const otherMaster=path.join(work,'other-master.xlsx');
+pyRun('open('+JSON.stringify(otherMaster)+',"wb").write(e.write_xlsx(e.COLUMNS,[{"\\u9879\\u76ee\\u540d\\u79f0":"other from second master"}]))');
+await p.locator('[data-view="settings"]').click();
+await p.locator('#cfgCloudExcel').fill(otherMaster);
+await p.locator('#saveCloudExcelBtn').click();
+await p.waitForFunction(()=>document.getElementById('cloudExcelState').textContent.includes('已保存'));
+await p.locator('[data-view="vault-search"]').click();
+await p.locator('#demo-keyword').fill('other');
+await p.locator('#demo-cards .card').filter({hasText:'other from second master'}).waitFor();
+assert.equal(await p.locator('#demo-cards .card').count(),1);
+await p.locator('#demo-keyword').fill('广州视睿');
+await p.locator('#demo-cards .empty').waitFor();
+await p.locator('#demo-keyword').fill('');
+assert(!(await p.locator('#demo-searchResults').isVisible()));
 // vault edit FIC
 await p.locator('[data-view="vault-manage"]').click();await p.locator('#demo-manageContract').selectOption('a1');assert.equal(await p.locator('#demo-editFic').inputValue(),'钱七');
 assert.deepEqual(errs,[]);console.log('ALL PASS');

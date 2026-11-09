@@ -11,6 +11,7 @@ import os
 import re
 import shutil
 import tempfile
+import unicodedata
 import zipfile
 from pathlib import Path
 from xml.etree import ElementTree as ET
@@ -222,6 +223,33 @@ def master_path(configured: str) -> Path:
     if path.is_dir():
         return path / MASTER_NAME
     raise ExcelError('路径需要是已存在的文件夹，或以 .xlsx 结尾的文件：' + str(path))
+
+
+def search_master(configured: str, query: str) -> dict:
+    def normalize(text):
+        return unicodedata.normalize('NFKC', text).casefold()
+
+    terms = normalize(query).split()
+    if not terms:
+        return {'rows': [], 'total': 0}
+    path = master_path(configured)
+    try:
+        _, rows = read_xlsx(path.read_bytes())
+    except FileNotFoundError:
+        raise ExcelError('当前路径还没有云盘总表，请先合并合同或检查同步状态')
+    except OSError:
+        raise ExcelError('无法读取云盘总表，请检查文件权限和同步状态')
+
+    matches = []
+    total = 0
+    for row in rows:
+        public_row = {column: row.get(column, '') for column in COLUMNS}
+        fields = [normalize(value) for value in public_row.values()]
+        if all(any(term in field for field in fields) for term in terms):
+            total += 1
+            if len(matches) < 100:
+                matches.append(public_row)
+    return {'rows': matches, 'total': total}
 
 
 def merge_into_master(configured: str, incoming: list[dict]) -> dict:
