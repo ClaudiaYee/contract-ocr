@@ -356,13 +356,18 @@ table { border-collapse: collapse; width: 100%; }
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  overflow: hidden;
+  max-height: 65vh;
+  overflow: auto;
+  scrollbar-color: var(--text-muted) var(--bg);
 }
 
 .contract-table {
+  min-width: 1080px;
   font-size: 13px;
 }
 .contract-table th {
+  position: sticky;
+  top: 0;
   text-align: left;
   padding: 14px 16px;
   background: var(--bg);
