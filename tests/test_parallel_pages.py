@@ -2,6 +2,7 @@
 import concurrent.futures
 import hashlib
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -84,6 +85,29 @@ class ParallelPageTests(unittest.TestCase):
         self.assertIn('SYNTHETIC PAGE 6', desktop.job_result(stored)['rawText'])
         desktop.put('jobs', 'job_p', {**stored, 'result': {'rawText': 'old duplicate'}})
         desktop.initialize_store(); self.assertNotIn('result', desktop.get_record('jobs', 'job_p'))
+
+    def test_compatibility_mode_saves_ocr_and_completes_analysis_without_child_processes(self):
+        server = SimpleNamespace()
+        with patch.dict(os.environ), patch('concurrent.futures.ProcessPoolExecutor', side_effect=AssertionError('unexpected child process')):
+            desktop.configure_workers(server, compatibility_mode=True)
+            self.addCleanup(server.semantic_pool.shutdown)
+            self.addCleanup(server.pool.shutdown)
+            self.assertIsNone(server.coordinators)
+            data = self.pdf.read_bytes()
+            job_id = 'job_compatibility'
+            (desktop.DATA_ROOT / 'queue' / (job_id + '.input')).write_bytes(data)
+            job = {'id': job_id, 'filename': self.pdf.name, 'fileSize': len(data), 'mode': 'balanced', 'createdAt': 1}
+            with patch('documents.recognize_pdf_page', synthetic_page), patch('semantic.classify', return_value={'semanticTags': [{'code': 'TEST'}]}):
+                desktop.submit_stored_job(server, job)
+                for _ in range(200):
+                    contract = desktop.get_record('contracts', job_id) or {}
+                    if contract.get('analysisStatus') == 'done':
+                        break
+                    time.sleep(.02)
+                self.assertEqual(contract.get('analysisStatus'), 'done')
+                self.assertEqual(contract['workerPid'], os.getpid())
+                self.assertIn('SYNTHETIC PAGE 6', contract['rawText'])
+                self.assertEqual(contract['semanticTags'], [{'code': 'TEST'}])
 
 
 if __name__ == '__main__': unittest.main()

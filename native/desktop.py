@@ -324,6 +324,26 @@ def create_ocr_pool(workers):
     return concurrent.futures.ProcessPoolExecutor(max_workers=workers,mp_context=multiprocessing.get_context('spawn'))
 
 
+def configure_workers(server, compatibility_mode):
+    server.worker_mode = 'compatibility' if compatibility_mode else 'process'
+    if compatibility_mode:
+        server.worker_count = 1
+        os.environ['CONTRACT_OCR_THREADS'] = str(ocr_threads(server.worker_count))
+        # Serialize all PDF handling on one thread. The semantic worker uses a separate model.
+        server.pool = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix='ocr-local')
+        server.semantic_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix='semantic-local')
+        server.coordinators = None
+        return
+
+    from semantic import initialize_worker
+    server.worker_count = worker_count()
+    server.pool = create_ocr_pool(server.worker_count)
+    server.semantic_pool = concurrent.futures.ProcessPoolExecutor(
+        max_workers=1, mp_context=multiprocessing.get_context('spawn'), initializer=initialize_worker)
+    # Two documents share the page workers through their coordinators.
+    server.coordinators = concurrent.futures.ThreadPoolExecutor(max_workers=2, thread_name_prefix='ocr-document')
+
+
 def machine_info():
     """CPU name, logical processors and memory, shown in settings to tune speed."""
     info = {'logicalProcessors': os.cpu_count()}
@@ -518,7 +538,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(data)
             return
         if path == '/api/health':
-            return self.respond(200, {'application': 'ContractOCR', 'version': VERSION, 'engine': 'native', 'workers': getattr(self.server,'worker_count',2), 'threads': ocr_threads(getattr(self.server,'worker_count',2)), 'machine': machine_info(), 'dataDirectory': str(DATA_ROOT), 'usage': storage_usage()})
+            return self.respond(200, {'application': 'ContractOCR', 'version': VERSION, 'engine': 'native', 'workers': self.server.worker_count, 'workerMode': self.server.worker_mode, 'threads': ocr_threads(self.server.worker_count), 'machine': machine_info(), 'dataDirectory': str(DATA_ROOT), 'usage': storage_usage()})
         if path == '/api/analysis':
             with DB_LOCK:return self.respond(200,list(ANALYSIS_STATES.values()))
         if path == '/api/contracts':
@@ -856,14 +876,9 @@ def main():
         print(f'{PORT}端口已被占用。如程序已打开，请使用已有窗口；否则关闭旧程序后重试。')
         return
     initialize_store()
-    from semantic import initialize_worker
-    semantic_pool = concurrent.futures.ProcessPoolExecutor(max_workers=1, mp_context=multiprocessing.get_context('spawn'), initializer=initialize_worker)
-    server.worker_count=worker_count()
-    pool=create_ocr_pool(server.worker_count)
-    server.pool = pool
-    # Two documents are coordinated at a time (as before); their pages share all OCR processes.
-    server.coordinators = concurrent.futures.ThreadPoolExecutor(max_workers=2, thread_name_prefix='ocr-document')
-    server.semantic_pool = semantic_pool
+    compatibility_mode = (sys.platform == 'win32' and getattr(sys, 'frozen', False)
+                          and os.environ.get('CONTRACT_OCR_PROCESS_WORKERS') != '1')
+    configure_workers(server, compatibility_mode)
     for job in job_records():
         if job.get('status')=='interrupted':
             try:submit_stored_job(server,job)
@@ -897,9 +912,10 @@ def main():
         pass
     finally:
         server.server_close()
-        server.coordinators.shutdown(wait=False, cancel_futures=True)
+        if server.coordinators is not None:
+            server.coordinators.shutdown(wait=False, cancel_futures=True)
         server.pool.shutdown(wait=True, cancel_futures=True)
-        semantic_pool.shutdown(wait=True, cancel_futures=True)
+        server.semantic_pool.shutdown(wait=True, cancel_futures=True)
 
 
 if __name__ == '__main__':

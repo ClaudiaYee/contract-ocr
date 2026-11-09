@@ -90,7 +90,7 @@
           <p id="engineStatus">浏览器 OCR · Windows 原生版请从 Releases 下载并启动 ContractOCR.exe</p>
           <label for="ocrMode">识别模式（对随后添加的文件生效）</label>
           <select id="ocrMode"><option value="fast">快速 · 清晰印刷件，分辨率较低</option><option value="balanced" selected>均衡 · 日常审计（推荐）</option><option value="fine">精细 · 手写日期/签字页：每页最多 6 行关键内容用 PP-OCRv5 server 复核，较慢</option></select>
-          <p>按 Ctrl / Shift 多选，或一次拖入多份文件；处理中可继续添加。最多同时处理两份文件；原生版使用本机进程，浏览器版 OCR 排队执行。小字遗漏时可切换精细模式重新识别。</p>
+          <p>按 Ctrl / Shift 多选，或一次拖入多份文件；处理中可继续添加。文件在本机处理。小字遗漏时可切换精细模式重新识别。</p>
         </div>
         <div class="upload-entry-grid">
         <div class="upload-zone" id="uploadZoneEy">
@@ -408,7 +408,7 @@
               <li><strong>业务语义匹配：</strong> 原生版内置 BGE 中文模型，识别业务表述</li>
               <li><strong>图表引擎：</strong> Apache ECharts</li>
               <li><strong>本地存储：</strong> 原生版：程序旁文件夹内的 JSON 数据及原文件；浏览器版：IndexedDB</li>
-              <li><strong>运行模式：</strong> 本机原生进程 / 浏览器备用 · v2.14.9</li>
+              <li><strong>运行模式：</strong> 本机原生 OCR / 浏览器备用 · v2.14.9</li>
               <li><strong>隐私保护：</strong> 云盘总表由指定同步目录提供，合同原件及识别全文保存在本机</li>
             </ul>
           </div>
@@ -543,6 +543,6 @@
   <script src="js/domain-catalog.js?v=2.14.9"></script>
   <script src="js/vault-model.js?v=2.14.9"></script>
   <script src="js/vault.js?v=2.14.9-cloud-filters"></script>
-  <script src="js/app.js?v=2.14.9-cloud-filters"></script>
+  <script src="js/app.js?v=2.14.9-worker-mode"></script>
 </body>
 </html>

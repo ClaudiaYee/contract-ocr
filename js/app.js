@@ -1300,6 +1300,7 @@ const App = (() => {
   // ============== 配置管理 ==============
   async function loadConfigToUI() {
     const controls=['cfgPartyA','cfgPartyB','cfgAmount','cfgWorkers','saveCfgBtn'].map(id=>document.getElementById(id));
+    let compatibilityMode = false;
     controls.forEach(control=>control.disabled=true);
     try {
       const cfg=await Storage.getConfig();
@@ -1309,12 +1310,17 @@ const App = (() => {
       document.getElementById('cfgWorkers').value=cfg.nativeWorkers||'auto';
       if(NativeDocuments.available()){
         const health=await NativeDocuments.request('/api/health');
-        const m=health.machine||{};document.getElementById('nativeWorkerState').textContent='当前本机并发：'+health.workers+' 个进程 × '+(health.threads||'?')+' 线程；本机 '+(m.cpu||'CPU')+' · '+(m.logicalProcessors||'?')+' 个逻辑处理器'+(m.memoryGB?' · 内存 '+m.memoryGB+'GB（可用 '+m.availableGB+'GB）':'')+'；修改并发后需重启EXE。';
+        compatibilityMode = health.workerMode === 'compatibility';
+        const m = health.machine || {};
+        const mode = compatibilityMode
+          ? 'Windows 兼容模式：一次识别一份文件，业务分析在后台独立运行。'
+          : '当前本机并发：'+health.workers+' 个进程 × '+(health.threads||'?')+' 线程。修改并发后需重启 EXE。';
+        document.getElementById('nativeWorkerState').textContent = mode+' 本机 '+(m.cpu||'CPU')+' · '+(m.logicalProcessors||'?')+' 个逻辑处理器'+(m.memoryGB?' · 内存 '+m.memoryGB+'GB（可用 '+m.availableGB+'GB）':'');
       }
       document.getElementById('exportBackupBtn').hidden=!NativeDocuments.available();
       if(NativeDocuments.available())document.getElementById('cfgCloudExcel').value=((await NativeDocuments.request('/api/config')).cloudExcel||{}).path||'';
     }catch(error){showToast('配置加载失败：'+error.message,'error');}
-    finally{controls.forEach(control=>control.disabled=false);}
+    finally{controls.forEach(control=>control.disabled=compatibilityMode && control.id==='cfgWorkers');}
   }
 
   async function saveConfig() {

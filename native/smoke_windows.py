@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import re
+import socket
 import subprocess
 import sys
 import tempfile
@@ -16,10 +17,15 @@ def main():
     import pymupdf as fitz
     executable = Path(sys.argv[1]).resolve()
     with tempfile.TemporaryDirectory() as temporary:
-        env = {**os.environ, 'CONTRACT_OCR_DATA_DIR': str(Path(temporary) / 'data'), 'CONTRACT_OCR_DIAGNOSTICS': '1', 'CONTRACT_OCR_WORKERS':'2'}
+        with socket.socket() as listener:
+            listener.bind(('127.0.0.1', 0))
+            port = listener.getsockname()[1]
+        data_directory = Path(temporary) / 'data'
+        env = {**os.environ, 'CONTRACT_OCR_DATA_DIR': str(data_directory), 'CONTRACT_OCR_DIAGNOSTICS': '1',
+               'CONTRACT_OCR_WORKERS': '2', 'CONTRACT_OCR_PORT': str(port)}
         process = subprocess.Popen([str(executable), '--no-browser'], env=env)
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-        origin = 'http://127.0.0.1:18765'
+        origin = f'http://127.0.0.1:{port}'
         def request(path, data=None, headers=None):
             try:
                 response = opener.open(urllib.request.Request(origin + path, data=data, headers=headers or {}), timeout=180)
@@ -27,11 +33,16 @@ def main():
                 print('Local API error:', error.read().decode('utf-8', errors='replace'))
                 raise
             return response.read()
+        def test_health():
+            health = json.loads(request('/api/health'))
+            if health.get('application') != 'ContractOCR' or Path(health.get('dataDirectory', '')).resolve() != data_directory.resolve():
+                raise RuntimeError('The server is not using the isolated test data directory')
+            return health
         try:
             for _ in range(120):
                 try:
-                    health = json.loads(request('/api/health'))
-                    if health['application'] == 'ContractOCR': break
+                    health = test_health()
+                    break
                 except OSError:
                     pass
                 if process.poll() is not None: raise RuntimeError('Packaged executable exited during startup')
@@ -67,7 +78,13 @@ def main():
                     time.sleep(.5)
                 else: raise RuntimeError('Packaged OCR timed out')
             assert all('AUDIT' in result['rawText'].upper() for result in results), results
-            assert len({r['workerPid'] for r in results}) == 2, 'Two worker processes were not exercised'
+            worker_pids = {result['workerPid'] for result in results}
+            if health.get('workerMode') == 'compatibility':
+                assert health['workers'] == 1 and worker_pids == {process.pid}, 'Packaged OCR did not run in the local compatibility worker'
+                worker_check = 'single OCR thread in the EXE process'
+            else:
+                assert len(worker_pids) == 2 and process.pid not in worker_pids, 'Two worker processes were not exercised'
+                worker_check = 'two OCR child processes'
             assert len(json.loads(request('/api/contracts'))) == 2
             assert all(result['layoutPages'][0]['width'] == 640 for result in results)
             assert all(result['pageAudit'][0]['characters'] > 0 for result in results)
@@ -124,6 +141,7 @@ def main():
             process=subprocess.Popen([str(executable),'--no-browser'],env=env)
             for _ in range(120):
                 try:
+                    test_health()
                     html=request('/').decode('utf-8');break
                 except OSError:time.sleep(.25)
             else:raise RuntimeError('EXE did not restart')
@@ -158,7 +176,7 @@ def main():
             else:raise RuntimeError('Independent analysis did not complete')
             timing={'originalScannedOCRSeconds':round(results[0]['seconds'],3),'cachedUploadToSavedSeconds':cache_elapsed,'cachedOCRSeconds':reused['seconds']}
             print('PASS scanned OCR cache, exact text/layout preservation, independent analysis:',json.dumps(timing))
-            Path('packaged-validation.json').write_text(json.dumps({'version':health['version'],'syntheticOnly':True,'workers':health['workers'],'timing':timing,'resumedPages':resumed['resumedPages'],'checks':['two workers','OCR page geometry','semantic model','cancellation','invalid input isolation','retry','forced EXE restart and checkpoint resume','saved notes','backup original bytes and archive integrity']}),encoding='utf-8')
+            Path('packaged-validation.json').write_text(json.dumps({'version':health['version'],'syntheticOnly':True,'workers':health['workers'],'workerMode':health.get('workerMode','process'),'timing':timing,'resumedPages':resumed['resumedPages'],'checks':[worker_check,'OCR page geometry','semantic model','cancellation','invalid input isolation','retry','forced EXE restart and checkpoint resume','saved notes','backup original bytes and archive integrity']}),encoding='utf-8')
             print('Packaged Windows regression passed: OCR, semantics, cancellation, retry, forced restart/resume, annotation persistence and complete backup.')
         finally:
             subprocess.run(['taskkill', '/F', '/T', '/PID', str(process.pid)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
