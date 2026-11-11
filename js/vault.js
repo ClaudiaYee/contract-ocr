@@ -17,11 +17,10 @@ function options(el,items,label){el.replaceChildren(new Option(label,''),...item
 
 // ===================== 检索筛选 =====================
 // 多选筛选：组内任一命中，组间同时满足；空数组表示不限。
-const filterState={services:[],specificTags:[],needs:[],systems:[]};
-const TEXT_FILTERS=['serviceTerm','deliverables'];
+const filterState={services:[],specificTags:[],systems:[]};
 // Engagement 筛选：按合同上保存的 Engagement 字段匹配。
 const ENGAGEMENT_FILTERS={engagementCode:['engagementCode'],engagementName:['engagementName','engagementCodeDescription']};
-const FILTER_INPUTS=['person','eic','pic',...TEXT_FILTERS,...Object.keys(ENGAGEMENT_FILTERS)];
+const FILTER_INPUTS=['person','eic','pic',...Object.keys(ENGAGEMENT_FILTERS)];
 // 有方向的参考关系：业务相关，绝不代表服务相同。
 const businessLinks=[
  {from:['数据咨询','数据核查','数据治理'],to:['数据治理','数据安全','经营分析','数据','对账'],why:'数据质量与管理相关，可参考数据口径、核对或安全管理经验'},
@@ -36,7 +35,7 @@ function pickerSuggestions(key){const q=$('filter-'+key).value.trim().toLowerCas
 function drawPicker(key){const root=$('picker-'+key);root.querySelector('.selected-tags').innerHTML=filterState[key].map((v,i)=>`<span class="select-chip">${esc(v)}<button type="button" data-remove="${i}" aria-label="移除${esc(v)}">×</button></span>`).join('');drawPickerMenu(key);}
 function drawPickerMenu(key){const query=$('filter-'+key).value.trim(),values=pickerSuggestions(key);$('menu-'+key).innerHTML=values.map(v=>`<button type="button" role="option" aria-selected="false" data-value="${esc(v)}">${esc(v)}</button>`).join('')+(query&&!pickerOptions(key).some(v=>v.toLowerCase()===query.toLowerCase())?`<button type="button" role="option" aria-selected="false" data-value="${esc(query)}">＋ 添加“${esc(query)}”</button>`:'')+(!values.length&&!query?'<span class="hint">暂无其他选项，可输入新名称</span>':'');}
 function addFilter(key,value){value=value.trim();if(!value)return;if(key==='services'){const known=pickerOptions('services').find(v=>VaultModel.normalizeSearch(ServiceContent.canonicalDomain(v))===VaultModel.normalizeSearch(ServiceContent.canonicalDomain(value)));if(!known){$('filter-'+key).setCustomValidity('请选择领域库中的名称；新业务领域可在本地领域库中添加，ITGC 等活动使用具体服务筛选。');$('filter-'+key).reportValidity();return;}value=known;}$('filter-'+key).setCustomValidity('');if(!filterState[key].some(x=>x.toLowerCase()===value.toLowerCase()))filterState[key].push(value);$('filter-'+key).value='';drawPicker(key);changed();}
-function initPickers(){for(const [key,label] of Object.entries({services:'服务领域',specificTags:'具体服务',needs:'客户业务诉求',systems:'涉及系统'})){const root=$('picker-'+key);root.innerHTML=`<div class="selected-tags"></div><div class="picker-entry"><input id="demo-filter-${key}" maxlength="120" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="demo-menu-${key}" aria-label="${label}：输入或多选" placeholder="输入或选择，可多选"><button type="button" class="picker-add" aria-label="添加${label}">＋</button></div><div class="picker-menu" id="demo-menu-${key}" role="listbox" aria-label="${label}可选项" hidden></div>`;const input=$('filter-'+key),menu=$('menu-'+key);const show=()=>{input.setCustomValidity('');drawPickerMenu(key);menu.hidden=false;input.setAttribute('aria-expanded','true');};input.addEventListener('focus',show);input.addEventListener('input',show);input.addEventListener('keydown',e=>{if(e.isComposing)return;if(e.key==='Enter'){e.preventDefault();addFilter(key,input.value);show();}if(e.key==='ArrowDown'){e.preventDefault();show();menu.querySelector('button')?.focus();}if(e.key==='Escape'){menu.hidden=true;input.setAttribute('aria-expanded','false');}});root.addEventListener('click',e=>{const remove=e.target.closest('[data-remove]'),item=e.target.closest('[data-value]');if(remove){filterState[key].splice(Number(remove.dataset.remove),1);drawPicker(key);changed();}else if(item){addFilter(key,item.dataset.value);input.focus();}else if(e.target.closest('.picker-add')){addFilter(key,input.value);input.focus();}});menu.addEventListener('keydown',e=>{const buttons=[...menu.querySelectorAll('button')],i=buttons.indexOf(document.activeElement);if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();buttons[(i+(e.key==='ArrowDown'?1:-1)+buttons.length)%buttons.length]?.focus();}if(e.key==='Escape'){input.focus();menu.hidden=true;input.setAttribute('aria-expanded','false');}});drawPicker(key);}document.addEventListener('click',e=>{if(discarded)return;for(const key of Object.keys(filterState))if(!$('picker-'+key).contains(e.target)){$('menu-'+key).hidden=true;$('filter-'+key).setAttribute('aria-expanded','false');}});}
+function initPickers(){for(const [key,label] of Object.entries({services:'服务领域',specificTags:'具体服务',systems:'涉及系统'})){const root=$('picker-'+key);root.innerHTML=`<div class="selected-tags"></div><div class="picker-entry"><input id="demo-filter-${key}" maxlength="120" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="demo-menu-${key}" aria-label="${label}：输入或多选" placeholder="输入或选择，可多选"><button type="button" class="picker-add" aria-label="添加${label}">＋</button></div><div class="picker-menu" id="demo-menu-${key}" role="listbox" aria-label="${label}可选项" hidden></div>`;const input=$('filter-'+key),menu=$('menu-'+key);const show=()=>{input.setCustomValidity('');drawPickerMenu(key);menu.hidden=false;input.setAttribute('aria-expanded','true');};input.addEventListener('focus',show);input.addEventListener('input',show);input.addEventListener('keydown',e=>{if(e.isComposing)return;if(e.key==='Enter'){e.preventDefault();addFilter(key,input.value);show();}if(e.key==='ArrowDown'){e.preventDefault();show();menu.querySelector('button')?.focus();}if(e.key==='Escape'){menu.hidden=true;input.setAttribute('aria-expanded','false');}});root.addEventListener('click',e=>{const remove=e.target.closest('[data-remove]'),item=e.target.closest('[data-value]');if(remove){filterState[key].splice(Number(remove.dataset.remove),1);drawPicker(key);changed();}else if(item){addFilter(key,item.dataset.value);input.focus();}else if(e.target.closest('.picker-add')){addFilter(key,input.value);input.focus();}});menu.addEventListener('keydown',e=>{const buttons=[...menu.querySelectorAll('button')],i=buttons.indexOf(document.activeElement);if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();buttons[(i+(e.key==='ArrowDown'?1:-1)+buttons.length)%buttons.length]?.focus();}if(e.key==='Escape'){input.focus();menu.hidden=true;input.setAttribute('aria-expanded','false');}});drawPicker(key);}document.addEventListener('click',e=>{if(discarded)return;for(const key of Object.keys(filterState))if(!$('picker-'+key).contains(e.target)){$('menu-'+key).hidden=true;$('filter-'+key).setAttribute('aria-expanded','false');}});}
 
 const plain=v=>VaultModel.normalizeSearch(v);
 function advancedActive(){return FILTER_INPUTS.some(k=>$(k).value.trim())||Object.values(filterState).some(v=>v.length);}
@@ -64,8 +63,6 @@ function filterLocal(query){
   if(filterState.services.length&&!filterState.services.some(t=>VaultModel.matchesDimension(c.services,t,'services')))continue;
   if(filterState.specificTags.length&&!filterState.specificTags.some(t=>VaultModel.matchesDimension(c.specificTags,t,'specificTags')))continue;
   if(filterState.systems.length&&!filterState.systems.some(t=>VaultModel.matchesDimension(c.systems,t,'systems')))continue;
-  if(filterState.needs.length&&!filterState.needs.some(t=>VaultModel.matchesDimension(c.needTags,t,'need')))continue;
-  if(TEXT_FILTERS.some(key=>$(key).value.trim()&&!String(Array.isArray(c[key])?c[key].join('、'):c[key]).toLowerCase().includes($(key).value.trim().toLowerCase())))continue;
   if(['eic','pic'].some(k=>who[k]&&!String(c[k]||'').toLowerCase().includes(who[k].toLowerCase())))continue;
   if(who.person&&!(c.eic+' '+c.pic+' '+(c.fic||'')).toLowerCase().includes(who.person.toLowerCase()))continue;
   const match=query?matchLocal(c,query):{kind:'direct',reasons:[]};
@@ -165,18 +162,16 @@ $('detail').addEventListener('click',e=>{if(e.target===$('detail')){const r=$('d
 // 使用独立草稿；只有成功保存才写回合同库。
 let draft=null,dirty=false,editingTag=null,draftRevision=null;
 const editorGroups={keywords:'关键词',systems:'系统',services:'服务领域',specificTags:'具体服务'};
-const TEXT_FIELDS={editName:'name',editPartyA:'partyA',editEngagementCode:'engagementCode',editEngagementCodeDescription:'engagementCodeDescription',editEngagementName:'engagementName',editPartyB:'partyB',editSignDate:'signDate',editNeed:'need',editOriginal:'originalDescription',editEic:'eic',editPic:'pic',editFic:'fic',editServiceTerm:'serviceTerm',editNotes:'notes',editAuditPurpose:'auditPurpose'};
+const TEXT_FIELDS={editName:'name',editPartyA:'partyA',editEngagementCode:'engagementCode',editEngagementCodeDescription:'engagementCodeDescription',editEngagementName:'engagementName',editPartyB:'partyB',editSignDate:'signDate',editEic:'eic',editPic:'pic',editFic:'fic'};
 const copy=x=>JSON.parse(JSON.stringify(x));
 function status(message,error=false){$('saveStatus').textContent=message;$('saveStatus').classList.toggle('error',error);}
 function markDirty(){if(!draft)return;dirty=true;$('draftState').textContent='● 有未保存修改';status('修改尚未保存。');}
 function loadDraft(id){
  const original=originals.find(c=>c.id===id),projected=contracts.find(c=>c.id===id);if(!original||!projected)return false;
  draftRevision=original.ocrRevision;
- draft={...copy(projected),partyA:original.partyA||'',partyB:original.partyB||'',signDate:original.signDate||'',auditPurpose:original.auditPurpose||'',engagementCode:original.engagementCode||'',engagementCodeDescription:original.engagementCodeDescription||'',engagementName:original.engagementName||''};
+ draft={...copy(projected),partyA:original.partyA||'',partyB:original.partyB||'',signDate:original.signDate||'',engagementCode:original.engagementCode||'',engagementCodeDescription:original.engagementCodeDescription||'',engagementName:original.engagementName||''};
  dirty=false;editingTag=null;
  for(const [field,key] of Object.entries(TEXT_FIELDS))$(field).value=draft[key]??'';
- $('editAuditPurposeReviewed').checked=false;
- $('editDeliverables').value=draft.deliverables.join('\n');
  renderEditors();
  $('editorTitle').textContent='编辑合同 · '+(draft.name||'未命名合同');
  $('draftState').textContent=ContractScope.resolve(draft).label+' · '+draft.id;
@@ -206,8 +201,8 @@ $('editorForm').addEventListener('input',e=>{if(!e.target.closest('.tag-add,.edi
 $('editorForm').addEventListener('change',e=>{if(!e.target.closest('.tag-add,.edit-inline'))markDirty();});
 function pendingInput(){if(!draft)return false;return !!editingTag||Object.keys(editorGroups).some(key=>$('add-'+key)?.value.trim());}
 $('discardDraft').onclick=()=>{if(!draft)return;if((dirty||pendingInput())&&!confirm('撤销当前合同所有未保存修改？'))return;loadDraft(draft.id);};
-$('extractKeywords').onclick=()=>{if(!draft)return;const text=ContractScope.category(draft)==='ey-template'?ContractScope.textFor(draft):draft.rawText||$('editOriginal').value.trim();if(!text){status(ContractScope.category(draft)==='ey-template'?'未定位附录一／工作说明书，请先核对识别全文。':'请先识别合同。',true);return;}const analyzed=draft.analysis||ServiceContent.analyze(text);const custom=draft.keywordsSelectionManual?draft.keywords.filter(k=>!analyzed.keywords.some(x=>x.label===k)):[];draft.keywords=[...new Set([...analyzed.keywords.map(x=>x.label),...custom])];editingTag=null;markDirty();renderEditors();status('已根据'+ContractScope.resolve(draft).label+'提取关键词，自定义关键词保留。');};
-$('generateTags').onclick=()=>{if(!draft)return;const analyzed=draft.analysis||ServiceContent.analyze(ContractScope.category(draft)==='ey-template'?ContractScope.textFor(draft):draft.rawText||$('editOriginal').value);draft.services=[...new Set(analyzed.serviceDomains.map(x=>x.label))];draft.specificTags=[...new Set(analyzed.services.map(x=>x.label))];draft.domainSelectionManual=false;draft.specificSelectionManual=false;editingTag=null;markDirty();renderEditors();status(ContractScope.category(draft)==='ey-template'&&!ContractScope.textFor(draft)?'未定位附录一／工作说明书，未生成自动Tag；自定义标签和笔记保留。':'已根据'+ContractScope.resolve(draft).label+'重新分类，保存后生效。');};
+$('extractKeywords').onclick=()=>{if(!draft)return;const text=ContractScope.category(draft)==='ey-template'?ContractScope.textFor(draft):draft.rawText;if(!text){status(ContractScope.category(draft)==='ey-template'?'未定位附录一／工作说明书，请先核对识别全文。':'请先识别合同。',true);return;}const analyzed=draft.analysis||ServiceContent.analyze(text);const custom=draft.keywordsSelectionManual?draft.keywords.filter(k=>!analyzed.keywords.some(x=>x.label===k)):[];draft.keywords=[...new Set([...analyzed.keywords.map(x=>x.label),...custom])];editingTag=null;markDirty();renderEditors();status('已根据'+ContractScope.resolve(draft).label+'提取关键词，自定义关键词保留。');};
+$('generateTags').onclick=()=>{if(!draft)return;const analyzed=draft.analysis||ServiceContent.analyze(ContractScope.category(draft)==='ey-template'?ContractScope.textFor(draft):draft.rawText);draft.services=[...new Set(analyzed.serviceDomains.map(x=>x.label))];draft.specificTags=[...new Set(analyzed.services.map(x=>x.label))];draft.domainSelectionManual=false;draft.specificSelectionManual=false;editingTag=null;markDirty();renderEditors();status(ContractScope.category(draft)==='ey-template'&&!ContractScope.textFor(draft)?'未定位附录一／工作说明书，未生成自动Tag；自定义标签和笔记保留。':'已根据'+ContractScope.resolve(draft).label+'重新分类，保存后生效。');};
 function setBusy(on){$('editorForm').querySelectorAll('input,select,textarea,button').forEach(el=>el.disabled=on);}
 $('editorForm').onsubmit=async e=>{
  e.preventDefault();if(!draft||saving)return;
@@ -215,7 +210,6 @@ $('editorForm').onsubmit=async e=>{
  const next=copy(draft);
  for(const [field,key] of Object.entries(TEXT_FIELDS))next[key]=$(field).value.trim();
  delete next.amount;delete next.enterpriseSize;
- next.deliverables=$('editDeliverables').value.split(/\n/).map(x=>x.trim()).filter(Boolean);
  if(!next.name){status('请填写合同名称。',true);$('editName').focus();return;}
  saving=true;setBusy(true);
  try{
@@ -223,7 +217,6 @@ $('editorForm').onsubmit=async e=>{
   if(!latest)throw Error('合同已被删除');
   if(latest.ocrRevision!==draftRevision)throw Error('识别结果已更新，请关闭后重新打开编辑');
   const record=VaultModel.update(latest,next);
-  if($('editAuditPurposeReviewed').checked){record.auditPurposeNeedsReview=false;record.auditPurposeEditedAt=Date.now();}
   await Storage.updateContract(record);
   dirty=false;editingTag=null;saving=false;setBusy(false);
   closeEditor(true);
