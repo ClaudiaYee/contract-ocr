@@ -102,27 +102,11 @@ const ICON_EDIT='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stro
 const ICON_DELETE='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
 // 命中的关键词排在前面，避免被「+N」折叠看不到。
 function keywordCell(list){const terms=highlightTerms().map(t=>t.toLowerCase());const hit=k=>terms.some(t=>String(k).toLowerCase().includes(t));list=[...list.filter(hit),...list.filter(k=>!hit(k))];const shownWords=list.slice(0,6);return `<td class="kw-cell" title="${esc(list.join('；'))}"><div class="list-kws">${shownWords.length?shownWords.map(k=>`<span class="list-kw">${highlight(k)}</span>`).join('')+(list.length>shownWords.length?`<span class="list-kw more">+${list.length-shownWords.length}</span>`:''):'<span class="list-kw-empty">-</span>'}</div></td>`;}
-// 关键词只出现在合同全文里时，在项目名称下显示命中处的一小段原文（OCR 字间可能有空格或换行）。
-function fullTextSnippets(text,visible){
- const terms=highlightTerms(),body=String(text||''),seen=String(visible||'').toLowerCase(),out=[];
- for(const term of terms){
-  if(seen.includes(term.toLowerCase()))continue;
-  const pattern=new RegExp([...term].map(ch=>ch.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('\\s*'),'i'),m=pattern.exec(body);
-  if(!m)continue;
-  const start=Math.max(0,m.index-18),end=Math.min(body.length,m.index+m[0].length+18);
-  const count=(body.match(new RegExp(pattern.source,'gi'))||[]).length;
-  out.push(`<div class="hit-snippet" title="合同全文中共 ${count} 处">全文：${start>0?'…':''}${esc(body.slice(start,m.index)).replace(/\s+/g,' ')}<mark>${esc(m[0].replace(/\s+/g,''))}</mark>${esc(body.slice(m.index+m[0].length,end)).replace(/\s+/g,' ')}${end<body.length?'…':''}${count>1?`<span class="hit-count">共 ${count} 处</span>`:''}</div>`);
-  if(out.length>=2)break;
- }
- return out.join('');
-}
 function resultRow(item,index){
  const related=item.kind==='related'?`<span class="match-kind" title="${esc((item.reasons||[]).join('；'))}">相关</span>`:'';
  if(item.type==='local'){
   const c=item.contract,o=originals.find(x=>x.id===c.id)||{};
-  const visible=[o.projectName||c.name,o.partyA,o.partyB,...(c.keywords||[]),c.pic,c.eic,c.fic].join(' ');
-  const body=c.uploadCategory==='ey-template'&&typeof ContractScope!=='undefined'?ContractScope.textFor(c):(o.rawText||c.rawText);
-  return `<tr data-index="${index}" data-id="${esc(c.id)}"><td><div class="project-name" title="${esc(o.projectName||c.name||'')}">${highlight(o.projectName||c.name||'未识别项目')}${related}</div>${fullTextSnippets(body,visible)}</td><td>${highlight(o.partyA||'-')}</td><td>${highlight(o.partyB||'-')}</td><td>${esc(o.signDate||'-')}</td>${keywordCell(c.keywords||[])}${['pic','eic','fic'].map(k=>`<td class="person-cell">${highlight(c[k]||'-')}</td>`).join('')}<td><div class="row-actions"><button class="row-action-btn" type="button" data-open="${index}" title="查看详情">${ICON_VIEW}</button><button class="row-action-btn" type="button" data-edit="${index}" title="编辑">${ICON_EDIT}</button><button class="row-action-btn danger" type="button" data-delete="${index}" title="删除">${ICON_DELETE}</button></div></td></tr>`;
+  return `<tr data-index="${index}" data-id="${esc(c.id)}"><td><div class="project-name" title="${esc(o.projectName||c.name||'')}">${highlight(o.projectName||c.name||'未识别项目')}${related}</div></td><td>${highlight(o.partyA||'-')}</td><td>${highlight(o.partyB||'-')}</td><td>${esc(o.signDate||'-')}</td>${keywordCell(c.keywords||[])}${['pic','eic','fic'].map(k=>`<td class="person-cell">${highlight(c[k]||'-')}</td>`).join('')}<td><div class="row-actions"><button class="row-action-btn" type="button" data-open="${index}" title="查看详情">${ICON_VIEW}</button><button class="row-action-btn" type="button" data-edit="${index}" title="编辑">${ICON_EDIT}</button><button class="row-action-btn danger" type="button" data-delete="${index}" title="删除">${ICON_DELETE}</button></div></td></tr>`;
  }
  const row=item.row;
  return `<tr data-index="${index}" class="row-remote"><td><div class="project-name" title="${esc(row['项目名称']||'')}">${highlight(row['项目名称']||'未识别项目')}${related}</div></td><td>${highlight(row['甲方']||'-')}</td><td>${highlight(row['乙方']||'-')}</td><td>${esc(row['签约时间']||'-')}</td>${keywordCell(words(row['原始关键词']))}${['PIC','EIC','FIC'].map(k=>`<td class="person-cell">${highlight(row[k]||'-')}</td>`).join('')}<td><div class="row-actions"><button class="row-action-btn" type="button" data-row="${index}" title="查看（他人上传，只读）">${ICON_VIEW}</button><span class="readonly-note">只读</span></div></td></tr>`;
