@@ -24,6 +24,11 @@ const VaultModel=(()=>{
    if(sourceChanged&&!profile.keywordsSelectionManual)profile.keywords=p.keywords;
    profile.specificTags=unique((sourceChanged&&!profile.specificSelectionManual?p.specificTags:profile.specificTags||p.specificTags).map(ServiceContent.cleanTag).filter(Boolean));
   }
+  // 关键词、服务领域、具体服务不允许手动修改：有合同正文时一律使用自动识别结果（旧版手动修改的值不再生效）。
+  // 只有从 Excel 导入、没有正文的记录保留表格中的关键词。
+  if(text.trim()){profile.keywords=p.keywords;profile.services=p.services;profile.specificTags=p.specificTags;}
+  else if(c.knowledgeProfile?.keywords)profile.keywords=c.knowledgeProfile.keywords;
+  delete profile.keywordsSelectionManual;delete profile.domainSelectionManual;delete profile.specificSelectionManual;
   // 规则更新后补入新识别的系统名称（手动添加的系统保留）
   profile.systems=unique([...(profile.systems||p.systems),...(sourceChanged&&!legacy?p.systems:[])].map(ServiceContent.normalizeSystem));
   const needText=profile.need||p.need, normalizedNeeds=typeof AnalysisResults!=='undefined'&&AnalysisResults.managed(c)&&needText===p.need?facts.needs:ContractFacts.analyze('客户诉求：'+needText).needs;
@@ -84,9 +89,13 @@ const VaultModel=(()=>{
  }
  function update(c,p){
   if(p.amount!==undefined&&p.amount!==''&&(!Number.isFinite(Number(p.amount))||Number(p.amount)<0))throw Error('请输入有效金额');
+  const auto=project(c);
+  // 保存时关键词 / 服务领域 / 具体服务始终取自动识别结果，不接受手动值
+  if(auto.analysisScope?.text?.trim()||(!auto.analysisScope&&c.rawText))p={...p,keywords:auto.keywords,services:auto.services,specificTags:auto.specificTags};
   if((p.services||[]).some(v=>!ServiceContent.isDomain(v)))throw Error('请输入明确的业务领域名称；ITGC 等具体服务及客户行业请填入相应分类');
-  if((p.specificTags||[]).some(v=>!ServiceContent.cleanTag(v)))throw Error('具体服务需为明确业务名称，不能是本协议服务等泛化片段');
-  const profile={...p,tagSchemaVersion:3,tagSourceFingerprint:project(c).tagSourceFingerprint};
+  if(!(auto.analysisScope?.text?.trim())&&(p.specificTags||[]).some(v=>!ServiceContent.cleanTag(v)))throw Error('具体服务需为明确业务名称，不能是本协议服务等泛化片段');
+  const profile={...p,tagSchemaVersion:3,tagSourceFingerprint:auto.tagSourceFingerprint};
+  delete profile.keywordsSelectionManual;delete profile.domainSelectionManual;delete profile.specificSelectionManual;
   if(c.knowledgeProfile&&c.knowledgeProfile.tagSchemaVersion!==3)profile.previousTagClassification={version:c.knowledgeProfile.tagSchemaVersion||1,previous:c.knowledgeProfile.previousTagClassification||null,services:c.knowledgeProfile.services||[],specificTags:c.knowledgeProfile.specificTags||[],keywords:c.knowledgeProfile.keywords||[]};delete profile.id;delete profile.rawText;delete profile.analysis;delete profile.factEvidence;delete profile.analysisScope;
   // 编辑弹窗不再显示金额：未提供 amount 时保留原值。甲乙方、签约时间、服务目的随同一次保存写回原字段。
   const identity={};for(const key of ['partyA','partyB','signDate','auditPurpose','engagementCode','engagementCodeDescription','engagementName'])if(typeof p[key]==='string'){identity[key]=p[key];delete profile[key];}

@@ -94,9 +94,9 @@ await p.locator('[data-view="upload"]').click();await p.locator('#searchInput').
 // 编辑弹窗（原合同整理与标签管理）：FIC 来自导入
 await p.locator('[data-view="upload"]').click();await p.locator('tr[data-id="a1"] [data-action="edit"]').click();await p.locator('#demo-editorDialog').waitFor({state:'visible'});assert.equal(await p.locator('#demo-editFic').inputValue(),'钱七');
 assert.equal(await p.locator('#demo-editAmount').count(),0);assert.equal(await p.locator('#demo-editEnterpriseSize').count(),0);
-await p.locator('#demo-add-keywords').fill('自定义关键词');await p.locator('#demo-add-keywords').press('Enter');await p.locator('#demo-add-systems').fill('Workday');await p.locator('#demo-add-systems').press('Enter');
+for(const id of ['#demo-add-keywords','#demo-add-services','#demo-add-specificTags','#demo-generateTags','#demo-extractKeywords','#demo-keywordsEditor button','#demo-specificTagsEditor button','#demo-servicesEditor button'])assert.equal(await p.locator(id).count(),0,id+' must be read-only');await p.locator('#demo-add-systems').fill('Workday');await p.locator('#demo-add-systems').press('Enter');
 await p.locator('#demo-editorForm [type=submit]').click();await p.locator('#demo-editorDialog').waitFor({state:'hidden'});
-const edited=await p.evaluate(async()=>(await Storage.getAllContracts()).find(c=>c.id==='a1'));assert(edited.knowledgeProfile.keywords.includes('自定义关键词'));assert(edited.knowledgeProfile.systems.includes('Workday'));assert.equal(edited.uploadedByName,me);
-assert((await p.locator('tr[data-id="a1"]').innerText()).includes('自定义关键词'));
+const edited=await p.evaluate(async()=>(await Storage.getAllContracts()).find(c=>c.id==='a1'));assert(edited.knowledgeProfile.systems.includes('Workday'));assert.equal(edited.uploadedByName,me);
+
 assert.deepEqual(errs,[]);console.log('ALL PASS');
 }catch(error){console.error(logs.slice(-3000));throw error;}finally{await b.close();s.kill();}})().catch(e=>{console.error(e);process.exit(1)});

@@ -256,12 +256,12 @@
 <div class="field wide"><label for="demo-editEngagementCodeDescription">Engagement Code Description</label><input id="demo-editEngagementCodeDescription" maxlength="300"></div>
 <div class="field"><label for="demo-editPartyA">签约主体甲方</label><input id="demo-editPartyA" maxlength="200"></div><div class="field"><label for="demo-editPartyB">签约主体乙方</label><input id="demo-editPartyB" maxlength="200"></div>
 <div class="field"><label for="demo-editSignDate">签约时间</label><input id="demo-editSignDate" type="date"></div>
-<div class="field wide"><div class="field-title">关键词<span class="optional">可自定义，回车添加；点关键词可修改</span><button type="button" class="secondary btn-inline" id="demo-extractKeywords">从全文提取</button></div><div id="demo-keywordsEditor" class="chip-editor"></div></div>
+<div class="field wide"><div class="field-title">关键词<span class="optional">由系统根据合同服务内容自动识别，不能手动修改</span></div><div id="demo-keywordsEditor" class="chip-editor"></div></div>
 <div class="field wide"><div class="field-title">系统<span class="optional">涉及的系统 / 技术，可自定义</span></div><div id="demo-systemsEditor" class="chip-editor"></div></div>
 <div class="field"><label for="demo-editEic">EIC 姓名</label><input id="demo-editEic" maxlength="60"></div><div class="field"><label for="demo-editPic">PIC 姓名</label><input id="demo-editPic" maxlength="60"></div>
 <div class="field"><label for="demo-editFic">FIC 姓名</label><input id="demo-editFic" maxlength="60"></div>
 </div></section>
-<section class="panel editor-panel"><div class="panel-title"><span class="step">02</span><h2>Tag 分类</h2><button type="button" class="secondary" id="demo-generateTags">按维度分类</button></div><p class="hint">点击标签文字可修改或删除。按维度分类会依据合同服务内容替换服务领域与具体服务，保存后生效。</p><div id="demo-servicesEditor" class="tag-group"></div><div id="demo-specificTagsEditor" class="tag-group"></div></section>
+<section class="panel editor-panel"><div class="panel-title"><span class="step">02</span><h2>Tag 分类</h2></div><p class="hint">服务领域与具体服务由系统根据合同服务内容自动识别，不能手动修改；识别规则更新后自动刷新。</p><div id="demo-servicesEditor" class="tag-group"></div><div id="demo-specificTagsEditor" class="tag-group"></div></section>
 </div><div class="save-bar"><button class="primary" type="submit">保存修改 ✓</button><button type="button" class="secondary" id="demo-discardDraft">撤销未保存修改</button><button type="button" class="secondary" id="demo-editorCancel">取消</button><span class="save-status" id="demo-saveStatus" role="status" aria-live="polite"></span></div></form>
 </dialog>
 <dialog id="demo-detail" aria-labelledby="demo-detailTitle"><div class="modal-head"><button class="close" id="demo-close" aria-label="关闭详情">×</button><h2 id="demo-detailTitle"></h2></div><div class="modal-body" id="demo-vaultDetailBody"></div></dialog><datalist id="demo-serviceTagOptions"></datalist></div>

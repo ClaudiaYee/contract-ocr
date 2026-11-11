@@ -41,10 +41,10 @@ assert(!r.services.some(x=>x.label==='统一登录服务'),'table row is not our
 for(const k of ['跨境物流业务系统','订单系统','运输系统','仓储系统','自助平台'])assert(sys.includes(k),k+' missing: '+sys);
 for(const k of ['财务核算系统','操作系统','以下系统'])assert(!sys.includes(k),k+' should not be a system: '+sys);
 
-// 3. 旧合同：规则更新后关键词刷新，手动编辑的关键词保持不变
+// 3. 旧合同：规则更新后关键词刷新；关键词不允许手动修改，旧版手动值也改为自动识别结果
 const old={id:'x',rawText:iso,knowledgeProfile:{tagSchemaVersion:3,tagSourceFingerprint:'old',keywords:['的培训'],services:[],specificTags:[],systems:['手动系统']}};
 assert(!M.project(old).keywords.includes('的培训'));
 assert(M.project(old).systems.includes('手动系统'));
 const manual={...old,knowledgeProfile:{...old.knowledgeProfile,keywordsSelectionManual:true,keywords:['自定义词']}};
-assert.deepEqual(Array.from(M.project(manual).keywords),['自定义词']);
+assert(!M.project(manual).keywords.includes('自定义词'),'manual keywords are no longer kept');assert(M.project(manual).keywords.includes('差距分析'));
 console.log('PASS keyword precision: item titles, standards, SOC labels, systems and refresh');

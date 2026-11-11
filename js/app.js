@@ -595,7 +595,8 @@ const App = (() => {
         const p=VaultModel.project(current),next={...p},keywords=splitKeywords(row['原始关键词']);let changed=false;
         if(row['项目名称']&&row['项目名称']!==p.name){next.name=row['项目名称'];changed=true;}
         for(const [column,key] of [['PIC','pic'],['EIC','eic'],['FIC','fic']])if(row[column]&&row[column]!==(p[key]||'')){next[key]=row[column];changed=true;}
-        if(keywords.length&&keywords.join('；')!==(p.keywords||[]).join('；')){next.keywords=keywords;next.keywordsSelectionManual=true;changed=true;}
+        // 已有合同的关键词只由自动识别产生，导入 Excel 不覆盖；没有正文的记录才使用表格中的关键词
+        if(!String(current.rawText||'').trim()&&keywords.length&&keywords.join('；')!==(p.keywords||[]).join('；')){next.keywords=keywords;changed=true;}
         let record=changed?VaultModel.update(current,next):{...current};
         for(const [column,key] of [['甲方','partyA'],['乙方','partyB'],['签约时间','signDate']])if(row[column]&&row[column]!==(current[key]||'')){record[key]=row[column];record.manualFieldsEditedAt=new Date().toISOString();changed=true;}
         for(const [column,key] of ENGAGEMENT_COLUMNS)if(row[column]&&row[column]!==(current[key]||'')){record[key]=row[column];changed=true;}
@@ -603,7 +604,7 @@ const App = (() => {
       }else{
         const keywords=splitKeywords(row['原始关键词']);
         await Storage.addContract({id:row['合同ID']||Storage.generateId(),projectName:row['项目名称']||'',partyA:row['甲方']||'',partyB:row['乙方']||'',signDate:row['签约时间']||'',...Object.fromEntries(ENGAGEMENT_COLUMNS.map(([column,key])=>[key,row[column]||''])),amount:null,content:'',deliverables:'',sourceFile:row['来源文件']||'',rawText:'',uploadCategory:'other',importedFromExcel:true,manualFieldsEditedAt:new Date().toISOString(),createdAt:Date.now(),
-          knowledgeProfile:{name:row['项目名称']||'',pic:row['PIC']||'',eic:row['EIC']||'',fic:row['FIC']||'',keywords,keywordsSelectionManual:true,tagSchemaVersion:3}});
+          knowledgeProfile:{name:row['项目名称']||'',pic:row['PIC']||'',eic:row['EIC']||'',fic:row['FIC']||'',keywords,tagSchemaVersion:3}});
         added++;
       }
     }
@@ -786,7 +787,7 @@ const App = (() => {
   }
 
   function renderBusinessKeywordTags(contract) {
-    if(AnalysisResults.managed(contract)&&!AnalysisResults.ready(contract))return '<div id="businessKeywordTags" class="detail-section business-keyword-tags"><h4>业务关键词与标签</h4><p>业务分析中，识别全文已可查看。</p><button type="button" id="editContractTags" hidden>编辑 Tag</button></div>';
+    if(AnalysisResults.managed(contract)&&!AnalysisResults.ready(contract))return '<div id="businessKeywordTags" class="detail-section business-keyword-tags"><h4>业务关键词与标签</h4><p>业务分析中，识别全文已可查看。</p><button type="button" id="editContractTags" hidden>编辑合同信息</button></div>';
     const profile=VaultModel.project(contract),facts=AnalysisResults.get(contract,'facts',()=>ContractFacts.analyze(ContractScope.textFor(contract))),raw=contract.rawText||'';
     const evidence=(items,value)=>items.find(item=>item.label===value)?.evidence||'';
     const row=(key,label,values,find)=>({key,label,items:[...new Set(values.filter(Boolean))].map(value=>({value,evidence:find(value)}))});
@@ -800,7 +801,7 @@ const App = (() => {
     ];
     if(profile.customTags.length)groups.push(row('custom','自定义标签',profile.customTags,()=>''));
     const count=groups.reduce((sum,g)=>sum+g.items.length,0);
-    const scope=ContractScope.resolve(contract);return `<div class="analysis-scope-note ${scope.status==='missing'||scope.status==='empty'?'missing':''}">${escapeHtml((ContractScope.category(contract)==='ey-template'?'安永模板类 · ':'')+scope.label)}</div><div class="detail-section business-keyword-tags" id="businessKeywordTags"><h4 class="summary-heading">业务关键词与标签（${count} 个）<button class="btn btn-ghost btn-sm" type="button" id="editContractTags">编辑 Tag</button></h4><div class="business-tag-groups">${groups.map(g=>`<div class="business-tag-row tags-${g.key}" data-business-tag-group="${g.key}"><span class="business-tag-label">${g.label}</span><div class="list-kws">${g.items.length?g.items.map(item=>{const start=item.evidence?ContractScope.offsetOf(contract,item.evidence):-1;return start>=0?`<button type="button" class="kw-chip business-tag-chip" data-evidence-contract="${escapeHtml(contract.id)}" data-offset="${start}" data-length="${item.evidence.length}" title="${escapeHtml('定位到原文：'+item.evidence)}">${escapeHtml(item.value)}</button>`:`<span class="kw-chip business-tag-chip" title="人工补充，可在标签管理编辑">${escapeHtml(item.value)}</span>`;}).join(''):'<span class="list-kw-empty">—</span>'}</div></div>`).join('')}</div></div>`;
+    const scope=ContractScope.resolve(contract);return `<div class="analysis-scope-note ${scope.status==='missing'||scope.status==='empty'?'missing':''}">${escapeHtml((ContractScope.category(contract)==='ey-template'?'安永模板类 · ':'')+scope.label)}</div><div class="detail-section business-keyword-tags" id="businessKeywordTags"><h4 class="summary-heading">业务关键词与标签（${count} 个）<button class="btn btn-ghost btn-sm" type="button" id="editContractTags">编辑合同信息</button></h4><div class="business-tag-groups">${groups.map(g=>`<div class="business-tag-row tags-${g.key}" data-business-tag-group="${g.key}"><span class="business-tag-label">${g.label}</span><div class="list-kws">${g.items.length?g.items.map(item=>{const start=item.evidence?ContractScope.offsetOf(contract,item.evidence):-1;return start>=0?`<button type="button" class="kw-chip business-tag-chip" data-evidence-contract="${escapeHtml(contract.id)}" data-offset="${start}" data-length="${item.evidence.length}" title="${escapeHtml('定位到原文：'+item.evidence)}">${escapeHtml(item.value)}</button>`:`<span class="kw-chip business-tag-chip" title="人工补充，可在标签管理编辑">${escapeHtml(item.value)}</span>`;}).join(''):'<span class="list-kw-empty">—</span>'}</div></div>`).join('')}</div></div>`;
   }
 
   // ============== 详情模态框 ==============
