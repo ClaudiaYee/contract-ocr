@@ -7,7 +7,7 @@ const VaultModel=(()=>{
  function project(c){
   const whole=c.rawText||'',scope=typeof ContractScope!=='undefined'?ContractScope.resolve(c):{text:whole,status:'full',start:0,end:whole.length,label:'全文分析'},text=scope.text;
   const read=(key,fn)=>typeof AnalysisResults!=='undefined'?AnalysisResults.get(c,key,fn):fn();
-  const facts=read('facts',()=>ContractFacts.analyze(text)),metadata=read('metadata',()=>ContractFacts.analyze(whole)),a=read('content',()=>ServiceContent.analyze(text,facts)),scopeKey=(c.uploadCategory==='ey-template'?'ey-template:':'')+fingerprint(text);
+  const facts=read('facts',()=>ContractFacts.analyze(text)),metadata=read('metadata',()=>ContractFacts.analyze(whole)),a=read('content',()=>ServiceContent.analyze(text,facts)),scopeKey='kw2:'+(c.uploadCategory==='ey-template'?'ey-template:':'')+fingerprint(text);
   const p={name:c.projectName||c.sourceFile||'未命名合同',amount:c.amount==null?'':Number(c.amount)/10000,industry:facts.industry,region:metadata.region,enterpriseSize:facts.enterpriseSize,businessModel:facts.businessModel,serviceTerm:metadata.serviceTerm,systems:labels(a.systems),eic:metadata.eic,pic:metadata.pic,fic:'',services:labels(a.serviceDomains),specificTags:labels(a.services),keywords:labels(a.keywords),customTags:[],need:unique([...facts.needs,...labels(a.goals)]).join('；'),needTags:facts.needs,scope:labels(a.services).join('；'),originalDescription:unique(a.services.map(x=>x.evidence)).join('\n'),deliverables:labels(a.deliverables),notes:''};
   const profile={...c.knowledgeProfile};if(profile.industry?.length===1)profile.industry=ContractFacts.industryPath(profile.industry[0]);
   if(typeof AnalysisResults!=='undefined'&&AnalysisResults.managed(c)&&!AnalysisResults.ready(c)){if(!profile.domainSelectionManual)profile.services=[];if(!profile.specificSelectionManual)profile.specificTags=[];if(!profile.keywordsSelectionManual)profile.keywords=[];}
@@ -24,7 +24,8 @@ const VaultModel=(()=>{
    if(sourceChanged&&!profile.keywordsSelectionManual)profile.keywords=p.keywords;
    profile.specificTags=unique((sourceChanged&&!profile.specificSelectionManual?p.specificTags:profile.specificTags||p.specificTags).map(ServiceContent.cleanTag).filter(Boolean));
   }
-  profile.systems=unique((profile.systems||p.systems).map(ServiceContent.normalizeSystem));
+  // 规则更新后补入新识别的系统名称（手动添加的系统保留）
+  profile.systems=unique([...(profile.systems||p.systems),...(sourceChanged&&!legacy?p.systems:[])].map(ServiceContent.normalizeSystem));
   const needText=profile.need||p.need, normalizedNeeds=typeof AnalysisResults!=='undefined'&&AnalysisResults.managed(c)&&needText===p.need?facts.needs:ContractFacts.analyze('客户诉求：'+needText).needs;
   return {...p,...profile,name:p.name,amount:p.amount,needTags:normalizedNeeds.length?normalizedNeeds:split(needText).filter(v=>v.length<=80),id:c.id,rawText:whole,uploadCategory:c.uploadCategory||'other',analysisScope:scope,analysis:a,factEvidence:facts.evidence,tagSchemaVersion:3,tagSourceFingerprint:scopeKey};
  }

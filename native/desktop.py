@@ -257,7 +257,7 @@ def analysis_state(contract):
     return {k:contract.get(k) for k in ['id','analysisStatus','analysisRequest','analysisError','ruleAnalysisStatus','ruleAnalysisError','ruleAnalysisSeconds']}
 
 def analysis_fingerprint(contract):
-    return hashlib.sha256(('analysis-2.14.9:'+contract.get('uploadCategory','other')+':'+contract.get('rawText','')).encode()).hexdigest()
+    return hashlib.sha256(('analysis-2.15.0:'+contract.get('uploadCategory','other')+':'+contract.get('rawText','')).encode()).hexdigest()
 
 def queue_analysis(server, identifier, force=False):
     from analysis_scope import classify_scoped
@@ -924,10 +924,9 @@ def main():
         elif contract.get('analysisStatus') in ['queued','running']:
             queue_analysis(server,contract['id'])
         elif contract.get('managedBusinessAnalysis') and contract.get('analysisStatus')=='done' and contract.get('analysisFingerprint')!=analysis_fingerprint(contract):
-            # 2.14.9 起一般条款不参与分析：只重新分析含一般条款的已有合同，其余保持原结果。
-            from analysis_scope import general_sections
-            try:
-                if general_sections(contract.get('rawText','')):queue_analysis(server,contract['id'])
+            # 2.15.0 关键词规则更精确（服务分项标题、标准与体系名称、SOC 写法统一、客户系统名称），
+            # 已有合同在后台重新分析一次；手动改过的关键词 / 标签不会被覆盖。
+            try:queue_analysis(server,contract['id'])
             except Exception:
                 pass  # 重新分析失败不影响启动，原结果保留，可在详情页重新分析
     print(f'合同识别 {VERSION}：正在启动本机OCR引擎，首次识别稍需等待。')

@@ -240,9 +240,11 @@ def search_terms(query: str) -> list[str]:
 def search_master(configured: str, query: str, people: dict, eligible_ids: set | None,
                   direct_ids: set, related_ids: set, match_any: bool = False) -> dict:
     def normalize(text):
-        return unicodedata.normalize('NFKC', text).casefold()
+        # 与本地检索一致：忽略空格、下划线、连字符和斜杠，「SOC2」也能命中「SOC 2」
+        return re.sub(r'[\s_\-/]+', '', unicodedata.normalize('NFKC', str(text or '')).casefold())
 
-    terms = search_terms(query)
+    terms = [normalize(term) for term in search_terms(query)]
+    terms = [term for term in terms if term]
     combine = any if match_any else all
     if not terms and not any(people.values()) and eligible_ids is None:
         return {'rows': [], 'total': 0}

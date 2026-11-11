@@ -88,7 +88,9 @@ const ServiceContent=(()=>{
    if(u.role==='training_service'){add('services','培训服务',u.text);for(const a of activities)for(const m of activityMatches(a,u.text))if(m.value.length<=32)add('keywords',m.value.replace(/^(?:提供|开展|组织)/,''),u.text);}
    for(const match of t.matchAll(new RegExp(topics.source,'gi')))add(['training','training_service'].includes(u.role)?'training':'topics',match[0],u.text);
    if(u.role==='scope'){
-    for(const label of openServices(u.text)){add('services',label,u.text);add('keywords',label,u.text);}
+    // 「编号 系统数量 使用目的」这类表格行描述的是客户的系统，只作关键词，不算我们提供的服务。
+    const tableRow=/^\s*\d{1,3}\s+\d{1,3}\s*[，,]/.test(u.text);
+    for(const label of openServices(u.text)){if(!tableRow)add('services',label,u.text);add('keywords',label,u.text);}
     for(const activity of activities)for(const m of activityMatches(activity,u.text))if(m.value.length<=32)add('keywords',m.value,u.text);
     for(const m of t.matchAll(new RegExp(standards.source,'gi')))add('keywords',m[0],u.text);
     for(const match of u.text.matchAll(/(?:出具|交付|提交|提供)([^。；\n]{2,50}(?:报告|清单|计划|课件|模板|材料|记录))/g))add('deliverables',match[1].trim(),u.text);
@@ -115,10 +117,85 @@ const ServiceContent=(()=>{
   if(out.services.some(x=>x.label==='培训服务'))add('serviceDomains','培训与能力建设',out.services.find(x=>x.label==='培训服务').evidence);
   out.services=out.services.filter(x=>!out.serviceDomains.some(d=>canonicalDomain(x.label)===d.label));
   if(typeof ContractFacts!=='undefined'){const client=facts||ContractFacts.analyze(source);out.industry=client.industry.length?[{label:client.industry.join(' / '),evidence:client.evidence.industry||''}]:[];}
+  refineKeywords(out,source);
   for(const group of Object.keys(out)){
    const seen=new Set();out[group]=out[group].filter(x=>{const key=x.label+'|'+x.evidence;if(seen.has(key))return false;seen.add(key);return true;});
   }
   return out;
+ }
+ // ===== 关键词精确化（云盘总表检索只能看到关键词等列）=====
+ // 1. 服务内容条款里的分项标题（如「a) 差距分析服务：…」）是最准确的服务关键词，排在最前；
+ // 2. 标准名称统一写法，并补上体系名称（ISO 27001 → 信息安全管理体系）；
+ // 3. SOC 1 / SOC 2 的多种写法合并为「SOC 2鉴证 / SOC 2报告 / SOC 2 类型一 / SOC 2 类型二」；
+ // 4. 去掉句子片段（「的培训」「控制设计的恰当性实施类型一检查」）和「进行系统培训」中被误认的「系统培训」；
+ // 5. 提取服务范围内的客户系统 / 平台名称（订单系统、仓储系统、“自助平台”）。
+ const ITEM_TITLE=/^\s*(?:[a-zA-Z][)）.]|[（(][a-zA-Z一二三四五六七八九十\d]{1,2}[)）]|[一二三四五六七八九十\d]{1,2}[、.．)）])\s*([^：:，,。；;（(]{2,18})[：:]/;
+ const SCOPE_HEADING=/^(?:第[一二三四五六七八九十百\d]{1,3}条\s*)?(?:服务内容|服务范围|工作内容|工作范围|项目内容|服务事项)\s*$/;
+ const NEXT_HEADING=/^(?:第[一二三四五六七八九十百\d]{1,3}条|附录|附件|服务范围的限制|贵公司的具体责任|[一二三四五六七八九十]{1,3}[、.．])/;
+ const STANDARD_TERMS=[[/ISO(?:\/IEC)?\s*27001/i,['ISO 27001','信息安全管理体系']],[/ISO(?:\/IEC)?\s*27701/i,['ISO 27701','隐私信息管理体系']],[/ISO(?:\/IEC)?\s*20000/i,['ISO 20000']],[/ISO(?:\/IEC)?\s*22301/i,['ISO 22301']],[/ISO\s*9001/i,['ISO 9001']],[/SSAE\s*-?\s*18/i,['SSAE 18']],[/ISAE\s*3402/i,['ISAE 3402']],[/ISAE\s*3000/i,['ISAE 3000']],[/TSP\s*Section\s*100|可信服务(?:标准|原则)/i,['可信服务标准']],[/\bAICPA\b|美国注册会计师协会/i,['AICPA']]];
+ const GENERIC_SYSTEMS=/^(?:计算机|信息|业务|客户|操作|应用|相关|其他|其它|该|上述|下述|各|所有|任何|对应|现有|内部|外部|第三方|服务机构|子|管理|控制|IT)?(?:系统|平台)$/;
+ function scopeLines(source){
+  const lines=String(source||'').split('\n'),out=[];let active=false;
+  for(const raw of lines){const line=raw.trim();if(!line)continue;
+   if(SCOPE_HEADING.test(line.replace(/\s+/g,''))){active=true;continue;}
+   if(active&&NEXT_HEADING.test(line)&&!ITEM_TITLE.test(line))active=false;
+   if(active)out.push(line);
+  }
+  return out;
+ }
+ function socTerms(text){
+  const t=String(text||'').replace(/Ⅱ/g,'II').replace(/Ⅰ/g,'I'),out=[];
+  for(const n of ['1','2']){
+   if(!new RegExp('SOC\\s*'+n+'(?![0-9])','i').test(t))continue;
+   const near=t.split('\n').filter(line=>new RegExp('SOC\\s*'+n+'(?![0-9])','i').test(line)).join('\n');
+   if(/鉴证|检查|examination|attestation/i.test(near))out.push(`SOC ${n}鉴证`);
+   if(/报告|report/i.test(near))out.push(`SOC ${n}报告`);
+   if(/类型一|类型1|Type\s*(?:I|1)(?![I\d])/i.test(near))out.push(`SOC ${n} 类型一`);
+   if(/类型二|类型2|Type\s*(?:II|2)(?![I\d])/i.test(near))out.push(`SOC ${n} 类型二`);
+   if(!out.some(x=>x.startsWith(`SOC ${n}`)))out.push(`SOC ${n}`);
+  }
+  return out;
+ }
+ function systemNames(source){
+  const found=[];
+  for(const line of String(source||'').split('\n')){
+   if(/不包括|不纳入|不涉及|排除|不会|不对|并未/.test(line))continue;
+   for(const m of line.matchAll(/(?:^|[\s，,、。；;：:（(“"「‘'对接包括的])([A-Za-z\u4e00-\u9fff]{2,12}?(?:系统|平台))(?=$|[\s，,、。；;：:）)”"」’'及和与对的A-Z])/g)){
+    const name=m[1].split('的').pop().replace(/^(?:对接|接入|包括|旧的|新的|原有的|现有的|新|旧|接)/,'');
+    if(name.length<3||GENERIC_SYSTEMS.test(name)||/^(?:进行|提供|开展|实施|对|在|为|没有|无|下列|以下|上述|如下|该)/.test(name)||/或|和|及|与|客户系统$/.test(name))continue;
+    if(!found.includes(name))found.push(name);
+   }
+  }
+  return found;
+ }
+ function refineKeywords(out,source){
+  const text=String(source||''),evidenceFor=re=>{const line=text.split('\n').find(l=>re.test(l));return line?line.trim():'';};
+  const adverbTraining=/(?:进行|开展|组织|提供)系统(?:性)?(?:地)?培训/;
+  const sentenceLike=k=>/^[的和及与或等、]/.test(k)||k.length>20||(k.length>12&&/的|实施|进行|对于|关于|根据/.test(k));
+  out.services=out.services.filter(x=>!(x.label==='系统培训'&&adverbTraining.test(x.evidence))).map(x=>{
+   let k=x.label.trim().replace(/ISO(?:\/IEC)?\s*(\d{4,5})/gi,'ISO $1').replace(/SOC\s*([12])/gi,'SOC $1');
+   if((k.match(/ISO \d{4,5}/g)||[]).length>=2)k=k.replace(/ISO \d{4,5}(?:[:：]\d{4})?/g,'').replace(/^[及和与、\s&]+|[及和与、\s&]+$/g,'');
+   return {label:k,evidence:x.evidence};
+  }).filter(x=>x.label.length>=2&&!sentenceLike(x.label));
+  const isSoc=label=>/^SOC\s*[12]/i.test(label);
+  let kept=out.keywords.filter(x=>{
+   const k=x.label.trim();
+   if(!k||isSoc(k))return false;
+   if(k==='系统培训'&&adverbTraining.test(x.evidence))return false;
+   return true;
+  }).map(x=>{
+   let k=x.label.trim().replace(/ISO(?:\/IEC)?\s*(\d{4,5})/gi,'ISO $1');
+   // 「ISO 27001及ISO 27701认证评估」：标准单独成词，这里只留活动「认证评估」
+   if((k.match(/ISO \d{4,5}/g)||[]).length>=2)k=k.replace(/ISO \d{4,5}(?:[:：]\d{4})?/g,'').replace(/^[及和与、\s&]+|[及和与、\s&]+$/g,'');
+   return {label:k,evidence:x.evidence};
+  }).filter(x=>x.label.length>=2&&!sentenceLike(x.label));
+  const titles=[];
+  for(const line of scopeLines(text)){const m=line.match(ITEM_TITLE);if(!m)continue;const title=m[1].trim().replace(/服务$/,'');if(title.length>=2&&!/乙方|甲方|本合同|本协议|定义|其他|其它|说明/.test(title))titles.push({label:title,evidence:line});}
+  const standards=[];for(const[re,labels]of STANDARD_TERMS)if(re.test(text))for(const label of labels)standards.push({label,evidence:evidenceFor(re)});
+  const soc=socTerms(text).map(label=>({label,evidence:evidenceFor(/SOC\s*[12]/i)}));
+  const seen=new Set(),key=v=>v.label.replace(/\s+/g,'').toLowerCase();
+  out.keywords=[...titles,...soc,...standards,...kept].filter(x=>{const k=key(x);if(seen.has(k))return false;seen.add(k);return true;});
+  for(const name of systemNames(text))if(!out.systems.some(x=>x.label===name))out.systems.push({label:name,evidence:evidenceFor(new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')))});
  }
  const domainNames=['SOX','业财','内控','风险咨询'];
  const domainAliases=new Map();

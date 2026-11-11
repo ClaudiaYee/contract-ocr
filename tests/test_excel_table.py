@@ -93,6 +93,12 @@ class ExcelTableTest(unittest.TestCase):
             for query in ['权限管理', 'SAP', '内控 ITGC']:
                 self.assertEqual([row['row']['合同ID'] for row in e.search_master(folder, query, {}, None, set(), set())['rows']], ['x'], query)
 
+    def test_search_ignores_spaces_in_labels(self):
+        with tempfile.TemporaryDirectory() as folder:
+            e.merge_into_master(folder, [{'项目名称': '某鉴证项目', '原始关键词': 'SOC 2鉴证；SSAE 18；ISO 27001', '合同ID': 's'}])
+            for query in ['SOC2', 'soc 2 鉴证', 'SSAE18', 'iso27001']:
+                self.assertEqual([row['row']['合同ID'] for row in e.search_master(folder, query, {}, None, set(), set())['rows']], ['s'], query)
+
 
 if __name__ == '__main__':
     unittest.main()

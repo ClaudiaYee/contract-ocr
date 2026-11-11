@@ -59,6 +59,8 @@ jobs:
         run: node tests/critical_review.cjs
       - name: Check service content classification boundaries
         run: node tests/service_content.cjs
+      - name: Check keyword precision for cloud search
+        run: node tests/keyword_precision.cjs
       - name: Check contract knowledge projection and retrieval
         run: node tests/vault_model.cjs
       - name: Check edit dialog keeps amount and saves keywords/systems
