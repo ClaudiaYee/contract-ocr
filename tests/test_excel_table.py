@@ -86,6 +86,13 @@ class ExcelTableTest(unittest.TestCase):
             self.assertEqual(ids(e.search_master(folder, '深圳 SOX', {}, None, set(), set(), match_any=True)), ['a', 'b', 'c'])
             self.assertEqual(ids(e.search_master(folder, 'ITGC;财务转型', {}, None, set(), set(), match_any=True)), ['a', 'c'])
 
+    def test_classification_columns_are_searchable_by_others(self):
+        self.assertTrue({'服务领域', '具体服务', '系统'} <= set(e.COLUMNS))
+        with tempfile.TemporaryDirectory() as folder:
+            e.merge_into_master(folder, [{'项目名称': '某评估项目', '原始关键词': '评估', '具体服务': 'ITGC；权限管理', '系统': 'SAP', '服务领域': '内控', '合同ID': 'x'}])
+            for query in ['权限管理', 'SAP', '内控 ITGC']:
+                self.assertEqual([row['row']['合同ID'] for row in e.search_master(folder, query, {}, None, set(), set())['rows']], ['x'], query)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -559,7 +559,7 @@ const App = (() => {
     return `<td class="kw-cell" title="${escapeHtml(keywords.join('；'))}"><div class="list-kws">${chips}</div></td>`+['pic','eic','fic'].map(k=>`<td class="person-cell">${escapeHtml(p[k]||'-')}</td>`).join('');
   }
   function excelRows(list){
-    return list.map(c=>{const p=listProfile(c);return {'项目名称':c.projectName||'','上传者ID':c.uploadedByName||myUploader(),'Engagement Code':c.engagementCode||'','Engagement Code Description':c.engagementCodeDescription||'','Engagement Name':c.engagementName||'','甲方':c.partyA||'','乙方':c.partyB||'','签约时间':c.signDate||'','原始关键词':(p.keywords||[]).join('；'),'PIC':p.pic||'','EIC':p.eic||'','FIC':p.fic||'','来源文件':c.sourceFile||'','合同ID':c.id};});
+    return list.map(c=>{const p=listProfile(c);return {'项目名称':c.projectName||'','上传者ID':c.uploadedByName||myUploader(),'Engagement Code':c.engagementCode||'','Engagement Code Description':c.engagementCodeDescription||'','Engagement Name':c.engagementName||'','甲方':c.partyA||'','乙方':c.partyB||'','签约时间':c.signDate||'','原始关键词':(p.keywords||[]).join('；'),'服务领域':(p.services||[]).join('；'),'具体服务':(p.specificTags||[]).join('；'),'系统':(p.systems||[]).join('；'),'PIC':p.pic||'','EIC':p.eic||'','FIC':p.fic||'','来源文件':c.sourceFile||'','合同ID':c.id};});
   }
   function needDesktop(){if(NativeDocuments.available())return false;showToast('Excel 导出、导入和云盘合并需要在桌面版（ContractOCR.exe）中使用','warning');return true;}
   async function excelPost(path,body,json=true){
