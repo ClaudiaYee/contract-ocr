@@ -197,7 +197,7 @@ def initialize_store():
 
 
 def default_uploader():
-    """This computer's Windows / system account name, used until 系统设置 sets a 上传人名称."""
+    """This computer's Windows / system account name, used until 系统设置 sets a 上传者ID."""
     import getpass
     for value in (os.environ.get('USERNAME'), os.environ.get('USER')):
         if value and value.strip():return value.strip()
@@ -206,7 +206,7 @@ def default_uploader():
 
 
 def uploader_name():
-    """上传人 recorded on contracts uploaded from this computer (no login: one uploader per workstation)."""
+    """上传者ID recorded on contracts uploaded from this computer (no login: one uploader per workstation)."""
     configured=((get_record('config','uploader') or {}).get('value') or {}).get('name','')
     return str(configured).strip()[:60] or default_uploader()
 
@@ -698,10 +698,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             rows = payload.get('rows')
             if not isinstance(rows, list) or not all(isinstance(row, dict) for row in rows):
                 return self.respond(400, {'error': '表格数据格式不正确'})
-            # 上传人 comes from this computer's contract records, never from the browser or an edited Excel row.
+            # 上传者ID comes from this computer's contract records, never from the browser or an edited Excel row.
             for row in rows:
                 contract = get_record('contracts', row.get('合同ID')) if isinstance(row.get('合同ID'), str) and row.get('合同ID') else None
-                row['上传人'] = (contract or {}).get('uploadedByName') or uploader_name()
+                row['上传者ID'] = (contract or {}).get('uploadedByName') or uploader_name()
             if path == '/api/excel/export':
                 body = excel_table.write_xlsx(excel_table.COLUMNS, rows)
                 self.send_response(200)

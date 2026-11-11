@@ -126,7 +126,7 @@
           <div class="panel cloud-upload-panel">
             <div class="cloud-select"><label for="cloudScope">上传范围</label><select id="cloudScope"><option value="all">全部本机合同</option><option value="current">合同列表当前筛选结果</option></select><span id="cloudTarget" class="cloud-notice"></span></div>
             <div class="cloud-preview" id="cloudPreview"></div>
-            <label class="cloud-confirm"><input type="checkbox" id="cloudConfirm"> 我已预览，确认合并到云盘总表（上传人按本机「上传人名称」记录）</label>
+            <label class="cloud-confirm"><input type="checkbox" id="cloudConfirm"> 我已预览，确认合并到云盘总表（「上传者ID」按本机设置填写）</label>
             <div><button class="btn btn-primary" id="cloudUploadBtn" type="button">确认并合并到云盘总表</button> <span id="cloudStatus" class="cloud-status" role="status"></span></div>
           </div>
         </section>
@@ -137,7 +137,6 @@
         <div class="view-header">
           <div>
             <h2>合同列表</h2>
-            <p>本机上传的合同（<span class="owner-tag mine">我上传</span>），可编辑信息与标签。他人上传的合同请在「合同检索」中查找，只能查看。</p>
           </div>
           <div class="view-actions">
             <input type="search" id="searchInput" placeholder="筛选项目/甲方/乙方/关键词/全文..." class="search-input">
@@ -156,12 +155,11 @@
           <table class="contract-table">
             <thead>
               <tr>
-                <th>合同名称</th>
-                <th>上传人</th>
+                <th>项目名称</th>
                 <th>甲方</th>
                 <th>乙方</th>
                 <th>签约时间</th>
-                <th>关键词</th>
+                <th>原始关键词</th>
                 <th>PIC</th>
                 <th>EIC</th>
                 <th>FIC</th>
@@ -170,7 +168,7 @@
             </thead>
             <tbody id="contractTableBody">
               <tr class="empty-row">
-                <td colspan="10">暂无合同数据，请先上传PDF文件</td>
+                <td colspan="9">暂无合同数据，请先上传PDF文件</td>
               </tr>
             </tbody>
           </table>
@@ -180,7 +178,7 @@
       <section class="view" id="view-settings">
         <div class="view-header">
           <h2>系统设置</h2>
-          <p>统一配置：识别规则、上传人名称、云盘总表连接与数据维护。合同上传、编辑与上传到云端总表在「上传识别」中进行。</p>
+          <p>统一配置：识别规则、上传者ID、云盘总表连接与数据维护。合同上传、编辑与上传到云端总表在「上传识别」中进行。</p>
         </div>
 
         <div class="settings-grid">
@@ -233,12 +231,12 @@
           </div>
 
           <div class="settings-card">
-            <h3>上传人名称</h3>
-            <p class="settings-desc">本机上传的合同记录为这个上传人，并写入云盘总表的「上传人」列，用于区分「我上传 / 他人上传」。留空则使用本机 Windows 账户名。已上传合同的上传人不随修改变化。</p>
+            <h3>上传者ID</h3>
+            <p class="settings-desc">合并到云盘总表时写入「上传者ID」列，用于区分合同是谁上传的；在「合同检索」中，总表里不在本机的合同显示为他人上传。留空则使用本机 Windows 账户名。已上传合同的上传者不随修改变化。</p>
             <div class="settings-form">
-              <label for="cfgUploader">上传人名称</label>
+              <label for="cfgUploader">上传者ID</label>
               <input type="text" id="cfgUploader" maxlength="60">
-              <button class="btn btn-primary" id="saveUploaderBtn" type="button">保存上传人名称</button>
+              <button class="btn btn-primary" id="saveUploaderBtn" type="button">保存上传者ID</button>
               <span id="uploaderState" role="status"></span>
             </div>
           </div>
@@ -270,7 +268,7 @@
 <div class="field"><label for="demo-person">PIC / EIC / FIC 姓名</label><input id="demo-person" placeholder="输入任一负责人的姓名"></div>
 <details class="field"><summary>更多筛选：业务模式、交付及负责人</summary><div class="field"><label for="demo-businessModel">业务模式</label><input id="demo-businessModel"></div><div class="field"><label for="demo-serviceTerm">服务期限 / 项目周期</label><input id="demo-serviceTerm"></div><div class="field"><label for="demo-deliverables">交付成果</label><input id="demo-deliverables"></div><div class="field"><label for="demo-eic">EIC 姓名</label><input id="demo-eic"></div><div class="field"><label for="demo-pic">PIC 姓名</label><input id="demo-pic"></div></details><p class="hint" style="border-top:1px solid var(--line);padding-top:17px;margin-top:23px">未选择即不限。输入后按 Enter 或点 ＋ 添加；同一组多选满足任一项，各组条件同时满足。</p>
 </aside></details>
-<section class="right" aria-label="合同检索与结果"><div class="panel search-panel"><div class="panel-title"><h2>搜索合同与业务经验</h2></div><form id="demo-searchForm"><div class="search-row"><input id="demo-keyword" maxlength="200" placeholder="搜索关键词、行业、服务领域、Tag 或上传人" aria-label="搜索关键词"><button class="primary" type="submit">搜索</button></div></form><p class="hint">输入关键词即可搜索本机合同和云盘总表；高级筛选只作用于本机合同。</p><div class="suggestions"><span>试试搜索</span><button type="button" data-key="SOX">SOX</button><button type="button" data-key="财务转型">财务转型</button><button type="button" data-key="风险评估">风险评估</button><button type="button" data-key="流程优化">流程优化</button></div></div>
+<section class="right" aria-label="合同检索与结果"><div class="panel search-panel"><div class="panel-title"><h2>搜索合同与业务经验</h2></div><form id="demo-searchForm"><div class="search-row"><input id="demo-keyword" maxlength="200" placeholder="搜索关键词、行业、服务领域、Tag 或上传者ID" aria-label="搜索关键词"><button class="primary" type="submit">搜索</button></div></form><p class="hint">输入关键词即可搜索本机合同和云盘总表；高级筛选只作用于本机合同。</p><div class="suggestions"><span>试试搜索</span><button type="button" data-key="SOX">SOX</button><button type="button" data-key="财务转型">财务转型</button><button type="button" data-key="风险评估">风险评估</button><button type="button" data-key="流程优化">流程优化</button></div></div>
 <div id="demo-searchResults" hidden><div class="results-header"><h2>合同搜索结果<span class="count" id="demo-count" aria-live="polite"></span></h2><select id="demo-sort" aria-label="结果排序"><option value="default">默认排序</option><option value="desc">签约时间：最新优先</option><option value="asc">签约时间：最早优先</option></select></div><div class="summary" id="demo-summary"></div><section aria-labelledby="demo-directTitle"><div class="match-heading"><h3 id="demo-directTitle">A. 精准匹配</h3><span id="demo-directCount"></span></div><div class="cards" id="demo-cards"></div></section><section class="related-section" aria-labelledby="demo-relatedTitle"><div class="match-heading"><h3 id="demo-relatedTitle">B. 相关匹配</h3><span id="demo-relatedCount"></span></div><p class="hint" id="demo-relatedNote">相关匹配根据本机已有合同的业务标签生成，不代表服务相同。</p><div class="cards" id="demo-relatedCards"></div></section></div></section>
 </div></section></section></div>
 <div class="vault-root vault-dialogs">

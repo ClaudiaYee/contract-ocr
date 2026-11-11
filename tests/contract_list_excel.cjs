@@ -1,4 +1,4 @@
-/** 合同列表与检索：上传人/关键词/PIC/EIC/FIC 列，Excel 导出 → 导入 → 上传到云端总表，总表中他人合同只读检索；真实本机服务，仅用合成数据。 */
+/** 合同列表与检索：关键词/PIC/EIC/FIC 列，云盘总表「上传者ID」列，Excel 导出 → 导入 → 上传到云端总表，总表中他人合同只读检索；真实本机服务，仅用合成数据。 */
 const assert=require('assert'),{spawn,execFileSync}=require('child_process'),{chromium}=require('playwright'),fs=require('fs'),os=require('os'),path=require('path');
 const repo=path.resolve(__dirname,'..'),py=process.env.PYTHON||'python';
 const pyRun=code=>execFileSync(py,['-c','import sys,json;sys.path.insert(0,'+JSON.stringify(path.join(repo,'native'))+');import excel_table as e\n'+code]).toString('utf8');
@@ -13,15 +13,15 @@ const ctx=await b.newContext({acceptDownloads:true,viewport:{width:1600,height:9
 await p.goto(origin);await p.waitForFunction(()=>window.__CONTRACT_OCR_READY,null,{timeout:30000});
 await p.evaluate(async()=>{await Storage.addContract({id:'a1',projectName:'广州视睿电子科技有限公司之SOC2类型二报告',partyA:'广州视睿电子科技有限公司',partyB:'安永华明会计师事务所',signDate:'2026-10-30',amount:273000,deliverables:'一份SOC2 报告',rawText:'服务内容：SOC2类型二鉴证，出具SOC2报告，评价内部控制。EIC：王五 PIC：赵六',createdAt:Date.now()});});
 await p.reload();await p.waitForFunction(()=>window.__CONTRACT_OCR_READY);await p.locator('[data-view="list"]').click();
-const heads=await p.locator('.contract-table thead th').allTextContents();assert.deepEqual(heads.map(x=>x.trim()),['合同名称','上传人','甲方','乙方','签约时间','关键词','PIC','EIC','FIC','操作']);
+const heads=await p.locator('.contract-table thead th').allTextContents();assert.deepEqual(heads.map(x=>x.trim()),['项目名称','甲方','乙方','签约时间','原始关键词','PIC','EIC','FIC','操作']);
 const me=(await p.evaluate(()=>NativeDocuments.request('/api/config'))).uploaderDefault;assert(me,'default uploader from this computer account');
-assert((await p.locator('tr[data-id="a1"] [data-uploader]').innerText()).includes('我上传'));
+assert.equal(await p.locator('tr[data-id="a1"] [data-uploader]').count(),0,'list has no uploader column');
 await p.waitForTimeout(500);const row=p.locator('tr[data-id="a1"]');const cells=await row.locator('td').allTextContents();console.log('row',cells.map(x=>x.trim().replace(/\s+/g,' ')));
 assert(!cells.join('').includes('27.30'));
 // export
 const [dl]=await Promise.all([p.waitForEvent('download'),p.locator('#exportExcelBtn').click()]);const xfile=path.join(work,'export.xlsx'),ifile=path.join(work,'import.xlsx');await dl.saveAs(xfile);console.log('download',dl.suggestedFilename());
 const parsed=JSON.parse(pyRun('h,r=e.read_xlsx(open('+JSON.stringify(xfile)+',"rb").read());sys.stdout.buffer.write(json.dumps({"h":h,"r":r}).encode())'));console.log(parsed);
-assert.equal(parsed.r[0]['合同ID'],'a1');assert(parsed.h.includes('上传人'));assert.equal(parsed.r[0]['上传人'],me,'上传人 is filled by the local service');
+assert.equal(parsed.r[0]['合同ID'],'a1');assert(parsed.h.includes('上传者ID'));assert.equal(parsed.r[0]['上传者ID'],me,'上传者ID is filled by the local service');
 // modify: FIC on a1, keywords, plus a new row
 pyRun('h,r=e.read_xlsx(open('+JSON.stringify(xfile)+',"rb").read());r[0]["FIC"]="\\u94b1\\u4e03";r[0]["\\u4e59\\u65b9"]="";r.append({"\\u9879\\u76ee\\u540d\\u79f0":"\\u65b0\\u5bfc\\u5165\\u9879\\u76ee","\\u7532\\u65b9":"\\u7532\\u516c\\u53f8","\\u7b7e\\u7ea6\\u65f6\\u95f4":"2026-01-02","\\u539f\\u59cb\\u5173\\u952e\\u8bcd":"ITGC\\uff1b\\u6e17\\u900f\\u6d4b\\u8bd5","PIC":"\\u5b59\\u516b"});open('+JSON.stringify(ifile)+',"wb").write(e.write_xlsx(e.COLUMNS,r))');
 await p.locator('#importExcelFile').setInputFiles(ifile);await toast(p,'新增 1 份，更新 1 份');
@@ -41,7 +41,7 @@ const master=path.join(cloud,'合同识别总表.xlsx');
 pyRun('h,r=e.read_xlsx(open('+JSON.stringify(master)+',"rb").read());h.append("\\u5907\\u6ce8");r[0]["\\u5907\\u6ce8"]="\\u624b\\u586b";r.append({"\\u9879\\u76ee\\u540d\\u79f0":"other","\\u7532\\u65b9":"X"});open('+JSON.stringify(master)+',"wb").write(e.write_xlsx(h,r))');
 await p.locator('#cloudConfirm').check();await p.locator('#cloudUploadBtn').click();await toast(p,'更新 2 行');
 const m=JSON.parse(pyRun('h,r=e.read_xlsx(open('+JSON.stringify(master)+',"rb").read());sys.stdout.buffer.write(json.dumps({"h":h,"r":r}).encode())'));console.log(m.h,m.r.map(r=>[r['项目名称'],r['FIC'],r['备注']]));
-assert.equal(m.r.length,3);assert(m.r.filter(r=>r['合同ID']).every(r=>r['上传人']===me));assert(m.h.includes('备注'));assert(m.r.some(r=>r['备注']==='手填'));assert(fs.readdirSync(cloud).some(f=>f.includes('备份')));
+assert.equal(m.r.length,3);assert(m.r.filter(r=>r['合同ID']).every(r=>r['上传者ID']===me));assert(m.h.includes('备注'));assert(m.r.some(r=>r['备注']==='手填'));assert(fs.readdirSync(cloud).some(f=>f.includes('备份')));
 // 合同检索：本机合同（我上传）+ 云盘总表中不在本机的合同（他人上传，只读），卡片展示，并跟随保存的路径变化。
 await p.locator('[data-view="vault-search"]').click();
 assert(!(await p.locator('#demo-searchResults').isVisible()));
@@ -59,12 +59,12 @@ await cloudCard.waitFor();
 assert((await cloudCard.innerText()).includes('他人上传'));assert.equal(await cloudCard.locator('[data-edit]').count(),0);
 await cloudCard.locator('[data-row]').click();
 assert.deepEqual(await p.locator('#demo-vaultDetailBody .facts span').allTextContents(),
- ['上传人','甲方','乙方','签约时间','原始关键词','PIC','EIC','FIC','来源文件','合同ID']);
+ ['上传者ID','甲方','乙方','签约时间','原始关键词','PIC','EIC','FIC','来源文件','合同ID']);
 await p.locator('#demo-close').click();
 await p.locator('#demo-keyword').fill('手填');
 await p.locator('#demo-cards .empty').waitFor();
 const otherMaster=path.join(work,'other-master.xlsx');
-pyRun('open('+JSON.stringify(otherMaster)+',"wb").write(e.write_xlsx(e.COLUMNS,[{"\\u9879\\u76ee\\u540d\\u79f0":"other from second master","\\u4e0a\\u4f20\\u4eba":"\\u540c\\u4e8b\\u4e59","\\u5408\\u540cID":"remote-1"}]))');
+pyRun('open('+JSON.stringify(otherMaster)+',"wb").write(e.write_xlsx(e.COLUMNS,[{"\\u9879\\u76ee\\u540d\\u79f0":"other from second master","\\u4e0a\\u4f20\\u8005ID":"\\u540c\\u4e8b\\u4e59","\\u5408\\u540cID":"remote-1"}]))');
 await p.locator('[data-view="settings"]').click();
 await p.waitForFunction(v=>document.getElementById('cfgCloudExcel').value===v&&!document.getElementById('saveCfgBtn').disabled,cloud);
 await p.locator('#cfgCloudExcel').fill(otherMaster);

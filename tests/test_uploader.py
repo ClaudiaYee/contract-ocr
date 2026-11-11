@@ -1,4 +1,4 @@
-"""上传人 (no login): each computer records its uploader name; it is stamped by the local service and written to the cloud master. Synthetic data only."""
+"""上传者ID (no login): each computer records its uploader name; it is stamped by the local service and written to the cloud master. Synthetic data only."""
 import http.server
 import json
 from pathlib import Path
@@ -62,18 +62,18 @@ class UploaderTests(unittest.TestCase):
         self.post('/api/contracts', {'action': 'add', 'contract': {'id': 'c1', 'projectName': '合同一'}})
         cloud = self.root / 'cloud'; cloud.mkdir()
         self.post('/api/config', {'key': 'cloudExcel', 'value': {'path': str(cloud)}})
-        row = {'项目名称': '合同一', '上传人': '冒充的人', '合同ID': 'c1'}
+        row = {'项目名称': '合同一', '上传者ID': '冒充的人', '合同ID': 'c1'}
         result = self.post('/api/excel/cloud-merge', {'rows': [row]})
         self.assertEqual(result['added'], 1)
         headers, rows = excel_table.read_xlsx((cloud / excel_table.MASTER_NAME).read_bytes())
-        self.assertEqual(headers[:2], ['项目名称', '上传人'])
-        self.assertEqual(rows[0]['上传人'], '同事甲')
+        self.assertEqual(headers[:2], ['项目名称', '上传者ID'])
+        self.assertEqual(rows[0]['上传者ID'], '同事甲')
         exported = self.post('/api/excel/export', {'rows': [row]})
-        self.assertEqual(excel_table.read_xlsx(exported)[1][0]['上传人'], '同事甲')
-        # Other people's rows in the shared master keep their own 上传人 and are searchable here.
-        excel_table.merge_into_master(str(cloud), [{'项目名称': '他人合同', '上传人': '同事乙', '合同ID': 'remote-1'}])
+        self.assertEqual(excel_table.read_xlsx(exported)[1][0]['上传者ID'], '同事甲')
+        # Other people's rows in the shared master keep their own 上传者ID and are searchable here.
+        excel_table.merge_into_master(str(cloud), [{'项目名称': '他人合同', '上传者ID': '同事乙', '合同ID': 'remote-1'}])
         found = self.post('/api/excel/cloud-search', {'query': '他人合同', 'people': {}, 'directIds': [], 'relatedIds': []})
-        self.assertEqual(found['rows'][0]['row']['上传人'], '同事乙')
+        self.assertEqual(found['rows'][0]['row']['上传者ID'], '同事乙')
 
 
 if __name__ == '__main__':

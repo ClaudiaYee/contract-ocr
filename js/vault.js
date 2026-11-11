@@ -45,7 +45,7 @@ function refreshRegionFilters(){const values=[1,2,3].map(n=>$('region'+n).value)
 const plain=v=>VaultModel.normalizeSearch(v);
 function advancedActive(){return [1,2,3].some(n=>$('level'+n).value||$('region'+n).value)||['person','eic','pic',...TEXT_FILTERS].some(k=>$(k).value.trim())||Object.values(filterState).some(v=>v.length);}
 function people(){return Object.fromEntries(['person','eic','pic'].map(key=>[key,$(key).value.trim()]));}
-// 列表文字搜索同时覆盖原列表字段（甲乙方、来源文件、上传人）与检索字段（关键词、Tag、行业等）。
+// 列表文字搜索同时覆盖原列表字段（甲乙方、来源文件、上传者ID）与检索字段（关键词、Tag、行业等）。
 function matchLocal(p,q){
  const m=VaultModel.matchContract(p,q,businessLinks);if(m.kind!=='none')return m;
  const o=originals.find(c=>c.id===p.id)||{};
@@ -94,7 +94,7 @@ function localCard(item,index){
 }
 function remoteCard(item,index){
  const row=item.row,tags=words(row['原始关键词']),classes=[['甲方',row['甲方']],['乙方',row['乙方']],['PIC',row['PIC']],['EIC',row['EIC']]].filter(([,v])=>v);
- return `<article class="card remote-result" data-index="${index}"><div class="result-meta"><span class="owner-tag others">他人上传</span><span>${esc(row['上传人']||'上传人未记录')}</span><span>· ${esc(row['签约时间']||'日期未填写')}</span></div><h3>${highlight(row['项目名称']||'未识别项目')}${item.kind==='related'?'<span class="match-kind">相关</span>':''}</h3><div class="result-tags">${tags.map(v=>`<span class="result-tag">${highlight(v)}</span>`).join('')}</div>${classes.length?`<p class="result-classification">${classes.map(([k,v])=>esc(k)+'：'+highlight(v)).join('　·　')}</p>`:''}<div class="card-actions"><button type="button" data-row="${index}">查看合同信息 ↗</button><span class="readonly-note">只读</span></div></article>`;
+ return `<article class="card remote-result" data-index="${index}"><div class="result-meta"><span class="owner-tag others">他人上传</span><span>${esc(row['上传者ID']||'上传者未记录')}</span><span>· ${esc(row['签约时间']||'日期未填写')}</span></div><h3>${highlight(row['项目名称']||'未识别项目')}${item.kind==='related'?'<span class="match-kind">相关</span>':''}</h3><div class="result-tags">${tags.map(v=>`<span class="result-tag">${highlight(v)}</span>`).join('')}</div>${classes.length?`<p class="result-classification">${classes.map(([k,v])=>esc(k)+'：'+highlight(v)).join('　·　')}</p>`:''}<div class="card-actions"><button type="button" data-row="${index}">查看合同信息 ↗</button><span class="readonly-note">只读</span></div></article>`;
 }
 function render(){
  if(discarded)return;

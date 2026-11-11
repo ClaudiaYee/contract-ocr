@@ -548,7 +548,7 @@ const App = (() => {
     if(!p){try{p=VaultModel.project(c);}catch{p={keywords:[],pic:'',eic:'',fic:''};}listProfiles.set(c,p);}
     return p;
   }
-  // 合同列表：本机合同（我上传）；他人上传的合同只在「合同检索」中出现。
+  // 合同列表：本机合同；云盘总表中他人上传的合同在「合同检索」中出现。
   let uploaderSelf='';
   const myUploader=()=>uploaderSelf||'本机';
   function listFiltered(){
@@ -562,7 +562,7 @@ const App = (() => {
     return `<td class="kw-cell" title="${escapeHtml(keywords.join('；'))}"><div class="list-kws">${chips}</div></td>`+['pic','eic','fic'].map(k=>`<td class="person-cell">${escapeHtml(p[k]||'-')}</td>`).join('');
   }
   function excelRows(list){
-    return list.map(c=>{const p=listProfile(c);return {'项目名称':c.projectName||'','上传人':c.uploadedByName||myUploader(),'甲方':c.partyA||'','乙方':c.partyB||'','签约时间':c.signDate||'','原始关键词':(p.keywords||[]).join('；'),'PIC':p.pic||'','EIC':p.eic||'','FIC':p.fic||'','来源文件':c.sourceFile||'','合同ID':c.id};});
+    return list.map(c=>{const p=listProfile(c);return {'项目名称':c.projectName||'','上传者ID':c.uploadedByName||myUploader(),'甲方':c.partyA||'','乙方':c.partyB||'','签约时间':c.signDate||'','原始关键词':(p.keywords||[]).join('；'),'PIC':p.pic||'','EIC':p.eic||'','FIC':p.fic||'','来源文件':c.sourceFile||'','合同ID':c.id};});
   }
   function needDesktop(){if(NativeDocuments.available())return false;showToast('Excel 导出、导入和云盘合并需要在桌面版（ContractOCR.exe）中使用','warning');return true;}
   async function excelPost(path,body,json=true){
@@ -623,7 +623,7 @@ const App = (() => {
     document.getElementById('cloudConfirm').checked=false;
     document.getElementById('cloudTarget').textContent=list.length?`共 ${list.length} 份合同`:'';
     if(!rows.length){box.innerHTML='<p class="cloud-notice">暂无可上传的合同，请先上传识别。</p>';return;}
-    const heads=['项目名称','上传人','甲方','乙方','签约时间','原始关键词','PIC','EIC','FIC'];
+    const heads=['项目名称','上传者ID','甲方','乙方','签约时间','原始关键词','PIC','EIC','FIC'];
     box.innerHTML=`<table><thead><tr>${heads.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.slice(0,50).map(r=>`<tr>${heads.map(h=>`<td>${escapeHtml(r[h]||'—')}</td>`).join('')}</tr>`).join('')}</tbody></table>${rows.length>50?`<p class="cloud-notice">仅预览前 50 行，将上传全部 ${rows.length} 行。</p>`:''}`;
   }
   async function cloudUpload(){
@@ -639,7 +639,7 @@ const App = (() => {
   async function saveUploader(){
     if(needDesktop())return;
     const name=document.getElementById('cfgUploader').value.trim(),state=document.getElementById('uploaderState');
-    try{await NativeDocuments.request('/api/config',{method:'POST',headers:{...NativeDocuments.headers(),'Content-Type':'application/json'},body:JSON.stringify({key:'uploader',value:{name}})});await loadUploader();state.textContent='✓ 已保存';showToast('上传人名称已保存：'+myUploader(),'success');}
+    try{await NativeDocuments.request('/api/config',{method:'POST',headers:{...NativeDocuments.headers(),'Content-Type':'application/json'},body:JSON.stringify({key:'uploader',value:{name}})});await loadUploader();state.textContent='✓ 已保存';showToast('上传者ID已保存：'+myUploader(),'success');}
     catch(error){state.textContent='';showToast('保存失败：'+error.message,'error');}
   }
   async function loadUploader(){
@@ -656,12 +656,12 @@ const App = (() => {
   function renderTable() {
     const tbody = document.getElementById('contractTableBody');
     if (contracts.length === 0) {
-      tbody.innerHTML = `<tr class="empty-row"><td colspan="10">暂无合同数据，请先上传PDF文件</td></tr>`;
+      tbody.innerHTML = `<tr class="empty-row"><td colspan="9">暂无合同数据，请先上传PDF文件</td></tr>`;
       return;
     }
     const filtered = listFiltered();
     if (filtered.length === 0) {
-      tbody.innerHTML = `<tr class="empty-row"><td colspan="10">没有匹配的合同</td></tr>`;
+      tbody.innerHTML = `<tr class="empty-row"><td colspan="9">没有匹配的合同</td></tr>`;
       return;
     }
     tbody.innerHTML = filtered.map(c => `
@@ -669,7 +669,6 @@ const App = (() => {
         <td>
           <div class="project-name" title="${escapeHtml(c.projectName || '未识别')}">${escapeHtml(c.projectName || '未识别项目')}</div>
         </td>
-        <td data-uploader><span class="owner-tag mine">我上传</span><span class="owner-name">${escapeHtml(c.uploadedByName||myUploader())}</span></td>
         <td>${escapeHtml(c.partyA || '-')}</td>
         <td>${escapeHtml(c.partyB || '-')}</td>
         <td>${escapeHtml(c.signDate || '-')}</td>
