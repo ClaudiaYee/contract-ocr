@@ -38,7 +38,7 @@ def main():
                 time.sleep(.5)
             else: raise RuntimeError('Packaged server did not start')
             html = request('/').decode('utf-8')
-            assert 'view-vault-search' in html and 'view-vault-manage' in html
+            assert 'view-vault-search' in html and 'demo-editorDialog' in html and 'myContracts' in html
             for asset in ['js/app.js','js/vault.js','js/vault-model.js','js/contract-facts.js','js/domain-catalog.js','js/contract-scope.js']:
                 assert asset+'?v='+health['version'] in html, asset
                 response=opener.open(urllib.request.Request(origin+'/'+asset+'?v='+health['version'],headers={'If-Modified-Since':'Wed, 31 Dec 2099 23:59:59 GMT'}))
