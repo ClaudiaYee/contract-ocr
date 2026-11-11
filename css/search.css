@@ -1,0 +1,71 @@
+/* v2.15.0：合同列表与检索、上传人标签、编辑弹窗、上传到云端总表。沿用应用原有配色与控件。 */
+#upload-cloud-share .panel{padding:26px;max-width:1100px}
+#upload-cloud-share .cloud-select{display:flex;gap:12px;align-items:center;margin:12px 0;flex-wrap:wrap}
+#upload-cloud-share select{min-width:250px;max-width:100%;padding:10px}
+#upload-cloud-share .cloud-preview{overflow:auto;margin:20px 0}
+#upload-cloud-share table{width:100%;border-collapse:collapse;font-size:13px}
+#upload-cloud-share th,#upload-cloud-share td{border-bottom:1px solid var(--border,#e2e8f0);padding:12px;text-align:left;white-space:nowrap}
+#upload-cloud-share .cloud-notice{line-height:1.8;color:var(--text-secondary,#64748b);margin:16px 0}
+#upload-cloud-share .cloud-status{margin:18px 0;line-height:1.7}
+
+/* ===== 合同列表与检索：检索条位于合同表上方 ===== */
+#view-list .list-search{margin-bottom:16px}
+#demo-searchPage .search-row{display:flex;gap:0;border:2px solid var(--primary,#2563eb);border-radius:10px;overflow:hidden;background:var(--bg-card,#fff)}
+#demo-searchPage .search-row input{flex:1;min-width:0;border:0!important;border-radius:0;padding:13px 16px;font-size:15px;box-shadow:none;outline:none}
+#demo-searchPage .search-row button{border-radius:0;min-width:96px;margin:0;font-size:15px;border:0}
+#demo-searchPage .list-search-meta{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px}
+#demo-searchPage .list-search-meta select{padding:7px 36px 7px 12px;border:1px solid var(--border,#e2e8f0);border-radius:8px;background-color:var(--bg-card,#fff);font-size:13px;width:auto}
+#demo-searchPage .scope-tabs{display:inline-flex;border:1px solid var(--border,#e2e8f0);border-radius:8px;overflow:hidden;background:var(--bg-card,#fff)}
+#demo-searchPage .scope-tab{border:0;background:transparent;padding:7px 14px;font-size:13px;color:var(--text-secondary,#64748b)}
+#demo-searchPage .scope-tab+.scope-tab{border-left:1px solid var(--border,#e2e8f0)}
+#demo-searchPage .scope-tab.active{background:var(--primary,#2563eb);color:#fff}
+#demo-searchPage .suggestions{display:inline-flex;gap:6px;align-items:center;font-size:12px;color:var(--text-muted,#94a3b8);margin-left:auto}
+#demo-searchPage .suggestions button{border:1px solid var(--border,#e2e8f0);background:var(--bg-card,#fff);border-radius:999px;padding:3px 10px;font-size:12px;color:var(--text-secondary,#64748b)}
+#demo-searchPage>.hint{margin:10px 2px 0;font-size:12px;color:var(--text-muted,#94a3b8)}
+#demo-searchPage .search-advanced{margin-top:6px}
+#demo-searchPage .search-advanced>summary{cursor:pointer;color:var(--text-secondary,#64748b);padding:8px 2px;font-size:13px}
+#demo-searchPage .search-advanced>aside{margin-top:8px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;padding:24px}
+#demo-searchPage .search-advanced .panel-title{grid-column:1/-1}
+#demo-searchPage .list-result-summary{margin-top:10px;font-size:13px;color:var(--text-secondary,#64748b);min-height:20px}
+#demo-searchPage .list-result-summary .error{color:var(--danger,#dc2626)}
+@media(max-width:760px){#demo-searchPage .search-advanced>aside{grid-template-columns:1fr}#demo-searchPage .suggestions{margin-left:0}}
+
+/* 上传人标签：我上传 = 可编辑；他人上传 = 只读 */
+.owner-tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;line-height:20px;white-space:nowrap;font-weight:500}
+.owner-tag.mine{background:#dbeafe;color:#1d4ed8}
+.owner-tag.others{background:#f1f5f9;color:#475569;border:1px solid #e2e8f0}
+.owner-tag.public{background:#fef9c3;color:#854d0e}
+.owner-tag.legacy{background:#fff7ed;color:#9a3412}
+#view-list td[data-uploader]{min-width:150px}
+#view-list td[data-uploader] .owner-name{display:block;font-size:12px;color:var(--text-secondary,#64748b);margin-top:3px;overflow-wrap:anywhere}
+#view-list tr.row-others td{background:#fbfcfe}
+#view-list tr.row-remote .project-name{color:var(--text-secondary,#475569)}
+#view-list .match-kind{display:inline-block;margin-left:6px;font-size:11px;padding:0 6px;border-radius:4px;background:#f1f5f9;color:#64748b;vertical-align:middle}
+#view-list .readonly-note{font-size:12px;color:var(--text-muted,#94a3b8);white-space:nowrap}
+#view-list mark{background:#fff0bd;color:inherit;padding:0 1px;border-radius:2px}
+
+/* 编辑弹窗（原合同整理与标签管理） */
+.vault-root dialog.editor-dialog{position:fixed;inset:0;margin:auto;width:calc(100% - 48px);max-width:1180px;max-height:92vh;max-height:92dvh;overflow:hidden;background:var(--surface,#fff)}
+.vault-root dialog.editor-dialog[open]{display:flex;flex-direction:column}
+.vault-root dialog.editor-dialog .modal-head{flex-shrink:0;display:flex;align-items:center;gap:16px;padding:18px 26px}
+.vault-root dialog.editor-dialog .modal-head h2{margin:0;font-size:20px}
+.vault-root dialog.editor-dialog .modal-head .save-status{font-size:12px;color:var(--text-muted,#94a3b8)}
+.vault-root dialog.editor-dialog .modal-body{min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:20px 26px 0}
+.vault-root dialog.editor-dialog .editor-grid{grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)}
+.vault-root dialog.editor-dialog .save-bar{position:sticky;bottom:0;background:var(--surface,#fff);padding:14px 0 18px;margin-top:16px;border-top:1px solid var(--line)}
+.vault-root dialog.editor-dialog .close{position:static;order:3;margin-left:auto}
+.vault-root .field-title .btn-inline{margin-left:auto;padding:4px 10px;font-size:12px}
+.vault-root .field-title{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.vault-root .chip-editor .tag-list{margin:6px 0}
+.vault-root .check-line{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--text-secondary,#64748b);margin-top:6px;font-weight:400}
+.vault-root .check-line input{width:auto}
+.vault-root .required{color:var(--danger,#dc2626)}
+@media(max-width:900px){.vault-root dialog.editor-dialog .editor-grid{grid-template-columns:1fr}}
+.readonly-banner{margin:0 0 16px;padding:10px 14px;border-radius:8px;background:#f1f5f9;color:#475569;font-size:13px;border:1px solid #e2e8f0}
+
+/* 单一合同上传口；上传到云端总表区域 */
+.upload-entry-grid.single{grid-template-columns:1fr}
+.upload-cloud-section{margin-top:36px;padding-top:24px;border-top:1px solid var(--border,#e2e8f0)}
+.upload-cloud-section .view-header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+#upload-cloud-share .cloud-confirm{display:flex;gap:8px;align-items:center;margin:8px 0 16px;font-size:13px}
+#upload-cloud-share .cloud-preview{max-height:320px}

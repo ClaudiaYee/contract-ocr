@@ -61,6 +61,8 @@ jobs:
         run: node tests/service_content.cjs
       - name: Check contract knowledge projection and retrieval
         run: node tests/vault_model.cjs
+      - name: Check edit dialog keeps amount and saves keywords/systems
+        run: node tests/edit_dialog_model.cjs
       - name: Check expandable local service domains
         run: node tests/domain_catalog.cjs
       - name: Audit semantic tag recall, roles and normalization

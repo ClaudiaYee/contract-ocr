@@ -82,12 +82,16 @@ const VaultModel=(()=>{
   return recordChanges(before,{...after,knowledgeProfile:profile,...(after.amount!==before.amount?{amountManuallyEdited:true}:{})});
  }
  function update(c,p){
-  if(p.amount!==''&&(!Number.isFinite(Number(p.amount))||Number(p.amount)<0))throw Error('请输入有效金额');
+  if(p.amount!==undefined&&p.amount!==''&&(!Number.isFinite(Number(p.amount))||Number(p.amount)<0))throw Error('请输入有效金额');
   if((p.services||[]).some(v=>!ServiceContent.isDomain(v)))throw Error('请输入明确的业务领域名称；ITGC 等具体服务及客户行业请填入相应分类');
   if((p.specificTags||[]).some(v=>!ServiceContent.cleanTag(v)))throw Error('具体服务需为明确业务名称，不能是本协议服务等泛化片段');
   const profile={...p,tagSchemaVersion:3,tagSourceFingerprint:project(c).tagSourceFingerprint};
   if(c.knowledgeProfile&&c.knowledgeProfile.tagSchemaVersion!==3)profile.previousTagClassification={version:c.knowledgeProfile.tagSchemaVersion||1,previous:c.knowledgeProfile.previousTagClassification||null,services:c.knowledgeProfile.services||[],specificTags:c.knowledgeProfile.specificTags||[],keywords:c.knowledgeProfile.keywords||[]};delete profile.id;delete profile.rawText;delete profile.analysis;delete profile.factEvidence;delete profile.analysisScope;
-  const prior=project(c);return synchronizeEdit(c,{...c,projectName:p.name,amount:p.amount===''?null:Math.round(Number(p.amount)*1000000)/100,content:p.scope!==prior.scope?p.scope:c.content,deliverables:JSON.stringify(p.deliverables)!==JSON.stringify(prior.deliverables)?(p.deliverables||[]).join('；'):c.deliverables,knowledgeProfile:profile,manualFieldsEditedAt:new Date().toISOString()});
+  // 编辑弹窗不再显示金额：未提供 amount 时保留原值。甲乙方、签约时间、服务目的随同一次保存写回原字段。
+  const identity={};for(const key of ['partyA','partyB','signDate','auditPurpose'])if(typeof p[key]==='string'){identity[key]=p[key];delete profile[key];}
+  if(identity.auditPurpose!==undefined&&identity.auditPurpose!==(c.auditPurpose||'')){identity.auditPurposeNeedsReview=false;identity.auditPurposeEditedAt=Date.now();}
+  const amount=p.amount===undefined?c.amount:p.amount===''?null:Math.round(Number(p.amount)*1000000)/100;if(p.amount===undefined)delete profile.amount;
+  const prior=project(c);return synchronizeEdit(c,{...c,...identity,projectName:p.name,amount,content:p.scope!==prior.scope?p.scope:c.content,deliverables:JSON.stringify(p.deliverables)!==JSON.stringify(prior.deliverables)?(p.deliverables||[]).join('；'):c.deliverables,knowledgeProfile:profile,manualFieldsEditedAt:new Date().toISOString()});
  }
  return{project,search,update,split,synchronizeEdit,matchContract,normalizeSearch,matchesDimension};
 })();
