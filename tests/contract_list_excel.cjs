@@ -42,25 +42,27 @@ pyRun('h,r=e.read_xlsx(open('+JSON.stringify(master)+',"rb").read());h.append("\
 await p.locator('#cloudConfirm').check();await p.locator('#cloudUploadBtn').click();await toast(p,'更新 2 行');
 const m=JSON.parse(pyRun('h,r=e.read_xlsx(open('+JSON.stringify(master)+',"rb").read());sys.stdout.buffer.write(json.dumps({"h":h,"r":r}).encode())'));console.log(m.h,m.r.map(r=>[r['项目名称'],r['FIC'],r['备注']]));
 assert.equal(m.r.length,3);assert(m.r.filter(r=>r['合同ID']).every(r=>r['上传人']===me));assert(m.h.includes('备注'));assert(m.r.some(r=>r['备注']==='手填'));assert(fs.readdirSync(cloud).some(f=>f.includes('备份')));
-// 合同列表与检索：本机合同（我上传）+ 云盘总表中不在本机的合同（他人上传，只读），并跟随保存的路径变化。
-await p.locator('[data-view="list"]').click();
+// 合同检索：本机合同（我上传）+ 云盘总表中不在本机的合同（他人上传，只读），卡片展示，并跟随保存的路径变化。
+await p.locator('[data-view="vault-search"]').click();
+assert(!(await p.locator('#demo-searchResults').isVisible()));
 await p.locator('#demo-searchPage .search-advanced > summary').click();
 assert(await p.locator('#demo-level1').isVisible());
 assert(await p.locator('#demo-filter-specificTags').isVisible());
 await p.locator('#demo-person').fill('钱七');
-await p.waitForFunction(()=>document.querySelectorAll('#contractTableBody tr[data-id]').length===1&&document.querySelector('#contractTableBody tr[data-id="a1"]'));
+await p.locator('#demo-cards .local-result').filter({hasText:'广州视睿'}).waitFor();
+assert((await p.locator('#demo-cards .local-result').first().innerText()).includes('我上传'));
 await p.locator('#demo-reset').click();
-await p.waitForFunction(()=>document.querySelectorAll('#contractTableBody tr[data-id]').length===2);
+assert(!(await p.locator('#demo-searchResults').isVisible()));
 await p.locator('#demo-keyword').fill('other');
-const cloudRow=p.locator('#contractTableBody tr.row-remote').filter({hasText:'other'});
-await cloudRow.waitFor();
-assert((await cloudRow.innerText()).includes('他人上传'));assert.equal(await cloudRow.locator('[data-action=edit]').count(),0);assert.equal(await cloudRow.locator('[data-action=delete]').count(),0);
-await cloudRow.locator('[data-action=remote]').click();
+const cloudCard=p.locator('#demo-cards .remote-result').filter({hasText:'other'});
+await cloudCard.waitFor();
+assert((await cloudCard.innerText()).includes('他人上传'));assert.equal(await cloudCard.locator('[data-edit]').count(),0);
+await cloudCard.locator('[data-row]').click();
 assert.deepEqual(await p.locator('#demo-vaultDetailBody .facts span').allTextContents(),
  ['上传人','甲方','乙方','签约时间','原始关键词','PIC','EIC','FIC','来源文件','合同ID']);
 await p.locator('#demo-close').click();
 await p.locator('#demo-keyword').fill('手填');
-await p.waitForFunction(()=>document.querySelector('#contractTableBody .empty-row')?.textContent.includes('没有匹配'));
+await p.locator('#demo-cards .empty').waitFor();
 const otherMaster=path.join(work,'other-master.xlsx');
 pyRun('open('+JSON.stringify(otherMaster)+',"wb").write(e.write_xlsx(e.COLUMNS,[{"\\u9879\\u76ee\\u540d\\u79f0":"other from second master","\\u4e0a\\u4f20\\u4eba":"\\u540c\\u4e8b\\u4e59","\\u5408\\u540cID":"remote-1"}]))');
 await p.locator('[data-view="settings"]').click();
@@ -68,18 +70,19 @@ await p.waitForFunction(v=>document.getElementById('cfgCloudExcel').value===v&&!
 await p.locator('#cfgCloudExcel').fill(otherMaster);
 await p.locator('#saveCloudExcelBtn').click();
 await p.waitForFunction(()=>document.getElementById('cloudExcelState').textContent.includes('已保存'));
-await p.locator('[data-view="list"]').click();
+await p.locator('[data-view="vault-search"]').click();
 await p.locator('#demo-keyword').fill('other');
-const second=p.locator('#contractTableBody tr.row-remote').filter({hasText:'other from second master'});
-await second.waitFor({timeout:5000}).catch(async error=>{console.error(await p.locator('#listResultSummary').innerText(),await p.locator('#contractTableBody').innerText());throw error;});
-assert.equal(await p.locator('#contractTableBody tr.row-remote').count(),1);assert((await second.innerText()).includes('同事乙'));
-await p.locator('[data-scope="mine"]').click();assert.equal(await p.locator('#contractTableBody tr.row-remote').count(),0);await p.locator('[data-scope="all"]').click();
+const second=p.locator('#demo-cards .remote-result').filter({hasText:'other from second master'});
+await second.waitFor({timeout:5000}).catch(async error=>{console.error(await p.locator('#demo-summary').innerText(),await p.locator('#demo-cards').innerText());throw error;});
+assert.equal(await p.locator('#demo-searchResults .remote-result').count(),1);assert((await second.innerText()).includes('同事乙'));
 await p.locator('#demo-keyword').fill('广州视睿');
-await p.waitForFunction(()=>document.querySelector('#contractTableBody tr[data-id="a1"]')&&!document.querySelector('#contractTableBody tr.row-remote'));
+await p.waitForFunction(()=>document.querySelector('#demo-cards .local-result')&&!document.querySelector('#demo-searchResults .remote-result')&&!document.getElementById('demo-summary').textContent.includes('正在'));
 await p.locator('#demo-keyword').fill('');
-await p.waitForFunction(()=>document.querySelectorAll('#contractTableBody tr[data-id]').length===2&&!document.querySelector('#contractTableBody tr.row-remote'));
+await p.waitForFunction(()=>document.getElementById('demo-searchResults').hidden);
+// 合同列表只显示本机合同；筛选框仍可用
+await p.locator('[data-view="list"]').click();await p.locator('#searchInput').fill('新导入');await p.waitForFunction(()=>document.querySelectorAll('#contractTableBody tr[data-id]').length===1);await p.locator('#searchInput').fill('');
 // 编辑弹窗（原合同整理与标签管理）：FIC 来自导入
-await p.locator('tr[data-id="a1"] [data-action="edit"]').click();await p.locator('#demo-editorDialog').waitFor({state:'visible'});assert.equal(await p.locator('#demo-editFic').inputValue(),'钱七');
+await p.locator('[data-view="list"]').click();await p.locator('tr[data-id="a1"] [data-action="edit"]').click();await p.locator('#demo-editorDialog').waitFor({state:'visible'});assert.equal(await p.locator('#demo-editFic').inputValue(),'钱七');
 assert.equal(await p.locator('#demo-editAmount').count(),0);assert.equal(await p.locator('#demo-editEnterpriseSize').count(),0);
 await p.locator('#demo-add-keywords').fill('自定义关键词');await p.locator('#demo-add-keywords').press('Enter');await p.locator('#demo-add-systems').fill('Workday');await p.locator('#demo-add-systems').press('Enter');
 await p.locator('#demo-editorForm [type=submit]').click();await p.locator('#demo-editorDialog').waitFor({state:'hidden'});

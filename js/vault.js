@@ -1,7 +1,7 @@
 /**
- * 合同检索（并入合同列表）与合同编辑弹窗（原「合同整理与标签管理」）。
- * - 检索：筛选条件实时过滤本机合同（我上传）；输入关键词后同时查询设置中的云盘 Excel 总表，
- *   总表里不在本机的合同即他人上传，在同一张合同表中按上传人标签只读展示。
+ * 合同检索页与合同编辑弹窗（原「合同整理与标签管理」）。
+ * - 合同检索页：本机合同（我上传）即时过滤；输入关键词后同时查询设置中的云盘 Excel 总表，
+ *   总表里不在本机的合同即他人上传，以卡片只读展示。
  * - 编辑：上传识别结果卡片和合同列表的「编辑」打开同一弹窗；只编辑本机合同。
  */
 const Vault=(()=>{let api=null;
@@ -67,45 +67,82 @@ function filterLocal(query){
  }
  return matches;
 }
-// 云盘总表检索结果：输入关键词后自动查询（防抖），条件变化即失效。
-let remote={key:null,rows:[],total:0,loading:false,error:''},requestId=0,timer=null,remoteTimer=null;
+// 检索结果：本机合同（我上传，可编辑）+ 云盘 Excel 总表里不在本机的合同（他人上传，只读），以卡片展示。
+// 本机部分即时过滤；云盘总表在输入后自动查询（防抖），条件变化即失效。
+let remote={key:null,rows:[],total:0,loading:false,error:''},requestId=0,timer=null,remoteTimer=null,shown=[];
 function criteriaKey(){return JSON.stringify({q:$('keyword').value.trim(),p:people(),f:filterState,v:[1,2,3].flatMap(n=>[$('level'+n).value,$('region'+n).value]),t:TEXT_FILTERS.map(k=>$(k).value)});}
-function criteria(){
- const query=$('keyword').value.trim(),advanced=advancedActive(),active=!!query||advanced;
- return {active,query,advanced,matches:active?filterLocal(query):null,remote:remote.key===criteriaKey()?remote:null};
-}
-function changed(){if(discarded)return;clearTimeout(timer);timer=setTimeout(()=>hooks.onResults(),120);clearTimeout(remoteTimer);if($('keyword').value.trim())remoteTimer=setTimeout(searchTeam,450);}
+function changed(){if(discarded)return;clearTimeout(timer);timer=setTimeout(render,120);clearTimeout(remoteTimer);if($('keyword').value.trim())remoteTimer=setTimeout(searchTeam,450);}
 async function searchTeam(){
  if(discarded)return;clearTimeout(remoteTimer);
  const query=$('keyword').value.trim(),key=criteriaKey(),id=++requestId;
- if(!query){remote={key,rows:[],total:0,loading:false,error:''};hooks.onResults();return;}
- remote={key,rows:[],total:0,loading:true,error:''};hooks.onResults();
+ if(!query){remote={key,rows:[],total:0,loading:false,error:''};render();return;}
+ remote={key,rows:[],total:0,loading:true,error:''};render();
  const local=filterLocal(query.toLowerCase()),advanced=advancedActive();
  try{
   const {rows,total}=await hooks.searchCloud({query,people:people(),eligibleIds:advanced?[...filterLocal('').keys()]:null,
-   directIds:[...local].filter(([,m])=>m.kind==='direct').map(([id])=>id),relatedIds:[...local].filter(([,m])=>m.kind==='related').map(([id])=>id),
-   });
+   directIds:[...local].filter(([,m])=>m.kind==='direct').map(([id])=>id),relatedIds:[...local].filter(([,m])=>m.kind==='related').map(([id])=>id)});
   if(id!==requestId||discarded)return;
   remote={key,rows,total,loading:false,error:''};
  }catch(error){if(id!==requestId||discarded)return;remote={key,rows:[],total:0,loading:false,error:error.message};}
- hooks.onResults();
+ render();
 }
-function reset(){[1,2,3].forEach(n=>{$('level'+n).value='';$('region'+n).value='';});options($('level2'),[],'全部二级行业');options($('level3'),[],'全部三级行业');$('level2').disabled=$('level3').disabled=true;['keyword','person','eic','pic',...TEXT_FILTERS].forEach(id=>$(id).value='');for(const key of Object.keys(filterState)){filterState[key]=[];$('filter-'+key).value='';drawPicker(key);$('menu-'+key).hidden=true;$('filter-'+key).setAttribute('aria-expanded','false');}refreshRegionFilters();remote={key:null,rows:[],total:0,loading:false,error:''};hooks.onResults();}
+function words(text){return [...new Set(String(text||'').split(/[；;、]/).map(x=>x.trim()).filter(Boolean))];}
+function localCard(item,index){
+ const c=item.contract,o=originals.find(x=>x.id===c.id)||{},tags=[...new Set([...(c.keywords||[]),...(c.specificTags||[]),...(c.customTags||[])])];
+ const classes=[['行业分类',(c.industry||[]).filter(Boolean).join(' / ')],['服务领域',(c.services||[]).join('；')],['系统',(c.systems||[]).join('；')]].filter(([,v])=>v);
+ return `<article class="card local-result" data-index="${index}"><div class="result-meta"><span class="owner-tag mine">我上传</span><span>${esc(o.uploadedByName||hooks.uploader())}</span><span>· ${esc(o.signDate||'日期未填写')}</span></div><h3>${highlight(c.name||'未识别项目')}${item.kind==='related'?`<span class="match-kind" title="${esc((item.reasons||[]).join('；'))}">相关</span>`:''}</h3><div class="result-tags">${tags.map(v=>`<span class="result-tag">${highlight(v)}</span>`).join('')}</div>${classes.length?`<p class="result-classification">${classes.map(([k,v])=>esc(k)+'：'+highlight(v)).join('　·　')}</p>`:''}<div class="card-actions"><button type="button" data-open="${index}">查看详情 ↗</button><button type="button" data-edit="${index}">编辑</button></div></article>`;
+}
+function remoteCard(item,index){
+ const row=item.row,tags=words(row['原始关键词']),classes=[['甲方',row['甲方']],['乙方',row['乙方']],['PIC',row['PIC']],['EIC',row['EIC']]].filter(([,v])=>v);
+ return `<article class="card remote-result" data-index="${index}"><div class="result-meta"><span class="owner-tag others">他人上传</span><span>${esc(row['上传人']||'上传人未记录')}</span><span>· ${esc(row['签约时间']||'日期未填写')}</span></div><h3>${highlight(row['项目名称']||'未识别项目')}${item.kind==='related'?'<span class="match-kind">相关</span>':''}</h3><div class="result-tags">${tags.map(v=>`<span class="result-tag">${highlight(v)}</span>`).join('')}</div>${classes.length?`<p class="result-classification">${classes.map(([k,v])=>esc(k)+'：'+highlight(v)).join('　·　')}</p>`:''}<div class="card-actions"><button type="button" data-row="${index}">查看合同信息 ↗</button><span class="readonly-note">只读</span></div></article>`;
+}
+function render(){
+ if(discarded)return;
+ const query=$('keyword').value.trim(),active=!!query||advancedActive();
+ $('searchPage').classList.toggle('has-results',active);$('searchResults').hidden=!active;
+ for(const key of ['cards','relatedCards','summary','count','directCount','relatedCount'])$(key).textContent='';
+ shown=[];if(!active)return;
+ const matches=filterLocal(query),current=remote.key===criteriaKey()?remote:null,known=new Set(contracts.map(c=>c.id));
+ const serverLocal=new Set((current?.rows||[]).map(x=>x.row['合同ID']).filter(id=>id&&known.has(id)));
+ const local=contracts.filter(c=>matches.has(c.id)||serverLocal.has(c.id)).map(c=>({type:'local',contract:c,kind:matches.get(c.id)?.kind||'direct',reasons:matches.get(c.id)?.reasons||[],date:(originals.find(o=>o.id===c.id)||{}).signDate||''}));
+ const others=(current?.rows||[]).filter(x=>!x.row['合同ID']||!known.has(x.row['合同ID'])).map(x=>({type:'remote',row:x.row,kind:x.kind,date:x.row['签约时间']||''}));
+ shown=[...local,...others];
+ const sort=$('sort').value;if(sort!=='default')shown.sort((a,b)=>{if(!a.date||!b.date)return Number(!a.date)-Number(!b.date);return a.date.localeCompare(b.date)*(sort==='asc'?1:-1);});
+ const cards=shown.map((item,i)=>item.type==='local'?localCard(item,i):remoteCard(item,i));
+ const direct=shown.map((x,i)=>[x,cards[i]]).filter(([x])=>x.kind!=='related'),related=shown.map((x,i)=>[x,cards[i]]).filter(([x])=>x.kind==='related');
+ $('count').textContent=`${shown.length} 条结果`;
+ $('directCount').textContent=`${direct.length} 份`;$('relatedCount').textContent=`${related.length} 份`;
+ $('cards').innerHTML=direct.length?direct.map(([,h])=>h).join(''):'<div class="empty compact">没有找到匹配结果，请尝试其他关键词。</div>';
+ $('relatedCards').innerHTML=related.map(([,h])=>h).join('');$('relatedCards').closest('.related-section').hidden=!related.length;
+ const parts=[`本机合同 ${local.length} 份`];
+ if(!query)parts.push('输入关键词可同时检索云盘总表');
+ else if(current?.loading)parts.push('正在检索云盘总表…');
+ else if(current?.error)parts.push(`<span class="error">云盘总表：${esc(current.error)}</span>`);
+ else if(current)parts.push(`云盘总表他人上传 ${others.length} 份${current.total>current.rows.length?`（共 ${current.total} 份，显示前 ${current.rows.length} 份）`:''}`);
+ $('summary').innerHTML=parts.join(' · ');
+}
+function reset(){[1,2,3].forEach(n=>{$('level'+n).value='';$('region'+n).value='';});options($('level2'),[],'全部二级行业');options($('level3'),[],'全部三级行业');$('level2').disabled=$('level3').disabled=true;['keyword','person','eic','pic',...TEXT_FILTERS].forEach(id=>$(id).value='');for(const key of Object.keys(filterState)){filterState[key]=[];$('filter-'+key).value='';drawPicker(key);$('menu-'+key).hidden=true;$('filter-'+key).setAttribute('aria-expanded','false');}$('sort').value='default';refreshRegionFilters();remote={key:null,rows:[],total:0,loading:false,error:''};render();}
 $('region1').onchange=()=>{$('region2').value='';$('region3').value='';refreshRegionFilters();changed();};
 $('region2').onchange=()=>{$('region3').value='';refreshRegionFilters();changed();};
-$('region3').addEventListener('change',changed);$('level3').addEventListener('change',changed);
+$('region3').addEventListener('change',changed);$('level3').addEventListener('change',changed);$('sort').addEventListener('change',render);
 ['keyword','person','eic','pic',...TEXT_FILTERS].forEach(id=>$(id).addEventListener('input',changed));
 $('reset').onclick=reset;
-$('searchForm').onsubmit=e=>{e.preventDefault();for(const key of Object.keys(filterState))if($('filter-'+key).value.trim())addFilter(key,$('filter-'+key).value);searchTeam();};
-$('searchPage').querySelectorAll('[data-key]').forEach(b=>b.onclick=()=>{$('keyword').value=b.dataset.key;searchTeam();});
+$('searchForm').onsubmit=e=>{e.preventDefault();for(const key of Object.keys(filterState))if($('filter-'+key).value.trim())addFilter(key,$('filter-'+key).value);render();searchTeam();};
+$('searchPage').querySelectorAll('[data-key]').forEach(b=>b.onclick=()=>{$('keyword').value=b.dataset.key;render();searchTeam();});
 function highlightTerms(){return $('keyword').value.trim().split(/\s+/).filter(Boolean).sort((a,b)=>b.length-a.length);}
 function highlight(value){const terms=highlightTerms();let text=esc(value);if(!terms.length)return text;const pattern=terms.map(v=>esc(v).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|');return text.replace(new RegExp(pattern,'gi'),v=>`<mark>${v}</mark>`);}
-// 他人合同只读详情：展示检索行里允许查看的字段。
+// 他人合同只读详情：展示云盘总表这一行的全部列。
 function showRow(row){
  $('detailTitle').textContent=row['项目名称']||'未识别项目';
- $('vaultDetailBody').innerHTML=`<p class="hint">来自云盘 Excel 总表、不在本机的合同，仅可查看和搜索。</p><div class="facts">${Object.entries(row).filter(([label])=>label!=='项目名称').map(([label,value])=>`<div><span>${esc(label)}</span><strong>${value?highlight(value):'—'}</strong></div>`).join('')}</div>`;
+ $('vaultDetailBody').innerHTML=`<p class="hint">他人上传，来自云盘 Excel 总表，仅可查看。</p><div class="facts">${Object.entries(row).filter(([label])=>label!=='项目名称').map(([label,value])=>`<div><span>${esc(label)}</span><strong>${value?highlight(value):'—'}</strong></div>`).join('')}</div>`;
  $('detail').showModal();
 }
+for(const box of [$('cards'),$('relatedCards')])box.addEventListener('click',e=>{
+ const open=e.target.closest('[data-open]'),edit=e.target.closest('[data-edit]'),row=e.target.closest('[data-row]');
+ if(open)hooks.openDetail(shown[Number(open.dataset.open)].contract.id);
+ else if(edit)openEditor(shown[Number(edit.dataset.edit)].contract.id);
+ else if(row)showRow(shown[Number(row.dataset.row)].row);
+});
 $('close').onclick=()=>$('detail').close();
 $('detail').addEventListener('click',e=>{if(e.target===$('detail')){const r=$('detail').getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)$('detail').close();}});
 
@@ -222,14 +259,14 @@ function sync(data){
  if(discarded)return;
  originals=data;contracts=data.map(project);contracts.forEach(c=>extendIndustry(c.industry));
  const current=$('level1').value;options($('level1'),Object.keys(industry),'全部一级行业');$('level1').value=current;
- updateSystemOptions();
+ updateSystemOptions();render();
  if(draft&&!originals.some(c=>c.id===draft.id)){closeEditor(true);hooks.toast('正在编辑的合同已被删除','warning');}
 }
 initPickers();updateSystemOptions();
 window.addEventListener('beforeunload',e=>{if(dirty||pendingInput()){e.preventDefault();e.returnValue='';}});
 return {
  discard(){discarded=true;clearTimeout(timer);clearTimeout(remoteTimer);requestId++;contracts=[];originals=[];draft=null;dirty=false;remote={key:null,rows:[],total:0,loading:false,error:''};if($('editorDialog').open)$('editorDialog').close();if($('detail').open)$('detail').close();},
- refresh:sync,criteria,openEditor,closeEditor,showRow,highlight,
+ refresh:sync,openEditor,closeEditor,showRow,
  canLeave:()=>!$('editorDialog').open||closeEditor(),
 };
 }
@@ -238,12 +275,10 @@ return {
  discard:()=>api?.discard(),
  refresh:data=>api?.refresh(data),
  render:data=>api?.refresh(data),
- criteria:()=>api?api.criteria():{active:false,query:'',matches:null,remote:null},
  openEditor:id=>api?api.openEditor(id):false,
  selectContract:id=>api?api.openEditor(id):false,
  closeEditor:force=>api?api.closeEditor(force):true,
  showRow:row=>api?.showRow(row),
- highlight:v=>api?api.highlight(v):String(v??''),
  canLeave:()=>api?api.canLeave():true,
 };
 })();

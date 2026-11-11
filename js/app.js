@@ -61,11 +61,10 @@ const App = (() => {
       stage('loadContracts');await loadContracts();
       stage('bindEvents');bindEvents();
       window.addEventListener('business-analysis-updated',async()=>{try{await loadContracts();watchAnalysis();const badge=document.getElementById('analysisState');if(badge&&!document.getElementById('detailModal').hidden&&!fullTextDraft&&!reviewDraft?.dirty()){const top=document.getElementById('detailBody').scrollTop;openDetailModal(badge.dataset.contractId);document.getElementById('detailBody').scrollTop=top;}}catch(e){console.warn(e.message);}});
-      Vault.init({searchCloud: searchCloudExcel, saved: loadContracts, onResults: () => renderTable(), toast: showToast});
+      Vault.init({searchCloud: searchCloudExcel, saved: loadContracts, toast: showToast, openDetail: id => openDetailModal(id), uploader: () => myUploader()});
       refreshVisibleVault();renderTable();
       stage('loadConfig');await loadConfigToUI();
       stage('recoverJobs');await recoverNativeJobs();
-      stage('keywordPool');if (typeof KeywordPool !== 'undefined') { KeywordPool.bind(); await KeywordPool.load(); }
       stage('ready');
       updateStorageInfo();
       // 后台静默预热 OCR 引擎：首次上传扫描型 PDF 时不会卡住
@@ -171,8 +170,8 @@ const App = (() => {
     }
     document.getElementById('cancelPendingBtn').addEventListener('click', cancelPendingJobs);
 
-    // 我上传 / 他人上传
-    for(const tab of document.querySelectorAll('#view-list [data-scope]'))tab.addEventListener('click',()=>{listScope=tab.dataset.scope;for(const t of document.querySelectorAll('#view-list [data-scope]')){t.classList.toggle('active',t===tab);t.setAttribute('aria-selected',String(t===tab));}renderTable();});
+    // 合同列表筛选（他人上传的合同在「合同检索」中查找）
+    document.getElementById('searchInput').addEventListener('input', () => renderTable());
     // 上传到云端总表
     document.getElementById('cloudScope').addEventListener('change',renderCloudPreview);
     document.getElementById('cloudUploadBtn').addEventListener('click',cloudUpload);
@@ -238,7 +237,8 @@ const App = (() => {
 
   // ============== 视图切换 ==============
   function switchView(viewName) {
-    if (viewName === 'vault-search' || viewName === 'vault-manage') viewName = 'list'; // 已并入合同列表与检索
+    if (viewName === 'vault-manage') viewName = 'list'; // 合同整理已并入「编辑」弹窗
+    if (viewName === 'dashboard' || viewName === 'keywords') viewName = 'list'; // 已移除的分析页
     const toCloud = viewName === 'cloud-share'; if (toCloud) viewName = 'upload'; // 上传到云端总表在上传识别页
     if (!Vault.canLeave()) return false;
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -249,16 +249,10 @@ const App = (() => {
     if (viewName === 'upload') {
       renderCloudPreview();
       if (toCloud) requestAnimationFrame(() => document.getElementById('upload-cloud-share').scrollIntoView({ block: 'start', behavior: 'smooth' }));
-    } else if (viewName === 'dashboard') {
-      // 重新渲染图表（确保尺寸正确）
-      setTimeout(() => {
-        Dashboard.render(contracts);
-      }, 50);
+    } else if (viewName === 'vault-search') {
+      Vault.refresh(contracts);
     } else if (viewName === 'settings') {
       loadConfigToUI();
-    } else if (viewName === 'keywords') {
-      renderBusinessCategories();
-      KeywordPool.render(contracts, id => openDetailModal(id));
     }
     return true;
   }
@@ -554,21 +548,13 @@ const App = (() => {
     if(!p){try{p=VaultModel.project(c);}catch{p={keywords:[],pic:'',eic:'',fic:''};}listProfiles.set(c,p);}
     return p;
   }
-  // 合同列表与检索：本机合同（我上传）按检索条件过滤；云盘总表里不在本机的合同为他人上传，只读。
-  let listScope='all',uploaderSelf='';
+  // 合同列表：本机合同（我上传）；他人上传的合同只在「合同检索」中出现。
+  let uploaderSelf='';
   const myUploader=()=>uploaderSelf||'本机';
   function listFiltered(){
-    const crit=Vault.criteria();
-    if(!crit.active)return contracts;
-    const serverIds=new Set((crit.remote?.rows||[]).map(x=>x.row['合同ID']).filter(Boolean));
-    const list=contracts.filter(c=>crit.matches.has(c.id)||serverIds.has(c.id));
-    if(crit.query){const rank=c=>crit.matches.get(c.id)?.kind==='related'?1:0;list.sort((a,b)=>rank(a)-rank(b));}
-    return list;
-  }
-  function remoteRows(crit){
-    if(!crit.active||!crit.remote)return [];
-    const known=new Set(contracts.map(c=>c.id));
-    return crit.remote.rows.filter(x=>!x.row['合同ID']||!known.has(x.row['合同ID']));
+    const filter=(document.getElementById('searchInput')?.value||'').trim().toLowerCase();
+    if(!filter)return contracts;
+    return contracts.filter(c=>{const p=listProfile(c);return [c.projectName,c.partyA,c.partyB,c.content,c.deliverables,c.sourceFile,c.rawText,c.uploadedByName,...(p.keywords||[]),...(p.systems||[]),p.pic,p.eic,p.fic].filter(Boolean).join(' ').toLowerCase().includes(filter);});
   }
   function listColumns(c){
     const p=listProfile(c),keywords=p.keywords||[],shown=keywords.slice(0,6);
@@ -627,7 +613,7 @@ const App = (() => {
   }
   // 合同列表的「上传到云端总表」跳到上传识别页的云端区域，默认选当前筛选结果。
   function cloudMerge(){
-    document.getElementById('cloudScope').value=Vault.criteria().active?'current':'all';
+    document.getElementById('cloudScope').value=document.getElementById('searchInput').value.trim()?'current':'all';
     switchView('cloud-share');
   }
   function cloudList(){return document.getElementById('cloudScope').value==='current'?listFiltered():contracts;}
@@ -667,48 +653,21 @@ const App = (() => {
   const ICON_VIEW='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
   const ICON_EDIT='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
   const ICON_DELETE='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
-  let shownRemote=[];
-  function listSummary(crit,local,remote){
-    const box=document.getElementById('listResultSummary');if(!box)return;
-    if(!crit.active){box.textContent='';return;}
-    const parts=[`本机匹配 ${local.length} 份`];
-    if(crit.remote?.loading)parts.push('正在检索云盘总表…');
-    else if(crit.remote?.error)parts.push(`<span class="error">云盘总表：${escapeHtml(crit.remote.error)}</span>`);
-    else if(crit.remote)parts.push(`云盘总表他人上传 ${remote.length} 份${crit.remote.total>crit.remote.rows.length?`（共 ${crit.remote.total} 份，显示前 ${crit.remote.rows.length} 份）`:''}`);
-    box.innerHTML=parts.join(' · ');
-  }
-  function remoteRowHtml(item,index){
-    const row=item.row,uploader=row['上传人']||'上传人未记录';
-    const words=[...new Set(String(row['原始关键词']||'').split(/[；;、]/).map(x=>x.trim()).filter(Boolean))],shown=words.slice(0,6);
-    const chips=shown.length?shown.map(k=>`<span class="list-kw">${Vault.highlight(k)}</span>`).join('')+(words.length>shown.length?`<span class="list-kw more">+${words.length-shown.length}</span>`:''):'<span class="list-kw-empty">-</span>';
-    return `<tr class="row-others row-remote" data-remote="${index}">
-        <td><div class="project-name" title="${escapeHtml(row['项目名称']||'')}">${Vault.highlight(row['项目名称']||'未识别项目')}${item.kind==='related'?'<span class="match-kind">相关</span>':''}</div></td>
-        <td data-uploader><span class="owner-tag others">他人上传</span><span class="owner-name">${escapeHtml(uploader)}</span></td>
-        <td>${escapeHtml(row['甲方']||'-')}</td><td>${escapeHtml(row['乙方']||'-')}</td><td>${escapeHtml(row['签约时间']||'-')}</td>
-        <td class="kw-cell" title="${escapeHtml(words.join('；'))}"><div class="list-kws">${chips}</div></td>
-        ${['PIC','EIC','FIC'].map(k=>`<td class="person-cell">${escapeHtml(row[k]||'-')}</td>`).join('')}
-        <td><div class="row-actions"><button class="row-action-btn" data-action="remote" title="查看（只读）">${ICON_VIEW}</button><span class="readonly-note">只读</span></div></td>
-      </tr>`;
-  }
   function renderTable() {
     const tbody = document.getElementById('contractTableBody');
-    const crit = Vault.criteria();
-    const local = listScope==='others' ? [] : listFiltered();
-    const remote = listScope==='mine' ? [] : remoteRows(crit);
-    shownRemote = remote;
-    listSummary(crit, local, remote);
-    if (!local.length && !remote.length) {
-      const nothing = !crit.active && contracts.length === 0;
-      tbody.innerHTML = `<tr class="empty-row"><td colspan="10">${nothing?'暂无合同数据，请先上传PDF文件':crit.remote?.loading?'正在检索…':listScope==='others'&&!crit.query?'输入关键词搜索云盘总表中他人上传的合同':'没有匹配的合同'}</td></tr>`;
+    if (contracts.length === 0) {
+      tbody.innerHTML = `<tr class="empty-row"><td colspan="10">暂无合同数据，请先上传PDF文件</td></tr>`;
       return;
     }
-    const name = c => crit.query ? Vault.highlight(c.projectName || '未识别项目') : escapeHtml(c.projectName || '未识别项目');
-    tbody.innerHTML = local.map(c => {
-      const kind = crit.matches?.get(c.id)?.kind;
-      return `
-      <tr data-id="${escapeHtml(c.id)}" class="row-mine">
+    const filtered = listFiltered();
+    if (filtered.length === 0) {
+      tbody.innerHTML = `<tr class="empty-row"><td colspan="10">没有匹配的合同</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = filtered.map(c => `
+      <tr data-id="${escapeHtml(c.id)}">
         <td>
-          <div class="project-name" title="${escapeHtml(c.projectName || '未识别')}">${name(c)}${kind==='related'?`<span class="match-kind" title="${escapeHtml((crit.matches.get(c.id).reasons||[]).join('；'))}">相关</span>`:''}</div>
+          <div class="project-name" title="${escapeHtml(c.projectName || '未识别')}">${escapeHtml(c.projectName || '未识别项目')}</div>
         </td>
         <td data-uploader><span class="owner-tag mine">我上传</span><span class="owner-name">${escapeHtml(c.uploadedByName||myUploader())}</span></td>
         <td>${escapeHtml(c.partyA || '-')}</td>
@@ -722,15 +681,13 @@ const App = (() => {
             <button class="row-action-btn danger" data-action="delete" title="删除">${ICON_DELETE}</button>
           </div>
         </td>
-      </tr>`;}).join('') + remote.map(remoteRowHtml).join('');
+      </tr>`).join('');
 
     // 绑定行操作
     tbody.querySelectorAll('button[data-action]').forEach(btn => {
       btn.addEventListener('click', e => {
         e.stopPropagation();
-        const tr = btn.closest('tr'), action = btn.dataset.action;
-        if (action === 'remote') { const item = shownRemote[Number(tr.dataset.remote)]; if (item) Vault.showRow(item.row); return; }
-        const id = tr.dataset.id;
+        const id = btn.closest('tr').dataset.id, action = btn.dataset.action;
         if (action === 'view') openDetailModal(id);
         else if (action === 'edit') Vault.openEditor(id);
         else if (action === 'delete') {
@@ -748,7 +705,6 @@ const App = (() => {
     // 双击行查看详情
     tbody.querySelectorAll('tr').forEach(row => {
       row.addEventListener('dblclick', () => {
-        if (row.dataset.remote !== undefined) { const item = shownRemote[Number(row.dataset.remote)]; if (item) Vault.showRow(item.row); return; }
         const id = row.dataset.id;
         if (id) openDetailModal(id);
       });
@@ -814,13 +770,6 @@ const App = (() => {
       preview.innerHTML = '<div class="source-location-text">' + escapeHtml(raw.slice(0, start)) + '<mark id="locatedEvidence">' + escapeHtml(raw.slice(start, end)) + '</mark>' + escapeHtml(raw.slice(end)) + '</div>';
       document.getElementById('locatedEvidence').scrollIntoView({ block: 'center', behavior: 'smooth' });
     });
-  }
-  function renderBusinessCategories() {
-    const box = document.getElementById('businessIntentResults');
-    if (!box) return;
-    box.innerHTML = '<h3>业务内容归类</h3><p>按合同展示业务分类，可展开依据、编辑分类及添加笔记。</p>' +
-      (contracts.length ? contracts.map(contract => `<details class="audit-review-item"><summary>${escapeHtml(contract.sourceFile || contract.projectName || '合同')}</summary>${businessTagsHtml(contract)}</details>`).join('') : '<p>请先上传合同。</p>');
-    bindBusinessActions(box);
   }
   function pageAuditRows(contract) {
     if (contract.pageAudit?.length) return contract.pageAudit;
@@ -1015,7 +964,7 @@ const App = (() => {
         document.getElementById('serviceSummaryPreview').innerHTML = DocumentView.paragraphs(AuditReview.summaryFor(updated).text);
         document.getElementById('serviceSummaryPreview').hidden = false;
         document.getElementById('serviceSummaryPanel').hidden = true;
-        renderBusinessCategories(); KeywordPool.render(contracts, selectedId => openDetailModal(selectedId)); updateStorageInfo();
+        updateStorageInfo();
       } catch (error) { showToast('保存失败，笔记仍保留在编辑框：' + error.message, 'error'); }
       finally { draft.saving = false; button.disabled = false; }
     };
@@ -1113,10 +1062,6 @@ const App = (() => {
       fullTextDraft = null;
       openDetailModal(id, true);
       refreshVisibleVault();renderTable();
-      if (document.getElementById('view-keywords').classList.contains('active')) {
-        renderBusinessCategories();
-        KeywordPool.render(contracts, selectedId => openDetailModal(selectedId));
-      }
       updateStorageInfo();
       showToast('全文已保存，业务关键词与标签已更新', 'success');
     };
