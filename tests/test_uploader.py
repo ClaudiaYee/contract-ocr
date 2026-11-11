@@ -19,6 +19,7 @@ class UploaderTests(unittest.TestCase):
         self.previous = desktop.DATA_ROOT, desktop.DB_PATH
         desktop.DATA_ROOT = self.root / 'data'; desktop.DB_PATH = desktop.DATA_ROOT / 'state.sqlite3'
         desktop.initialize_store()
+        self.default_cloud=desktop.DEFAULT_CLOUD_PATH;desktop.DEFAULT_CLOUD_PATH=''
         self.server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), desktop.Handler)
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
         self.origin = f'http://127.0.0.1:{self.server.server_port}'
@@ -26,7 +27,7 @@ class UploaderTests(unittest.TestCase):
 
     def tearDown(self):
         self.server.shutdown(); self.server.server_close()
-        desktop.DATA_ROOT, desktop.DB_PATH = self.previous; self.tmp.cleanup()
+        desktop.DATA_ROOT, desktop.DB_PATH = self.previous; desktop.DEFAULT_CLOUD_PATH=self.default_cloud; self.tmp.cleanup()
 
     def post(self, path, payload):
         headers = {'Origin': self.origin, 'X-OCR-Token': desktop.TOKEN, 'Content-Type': 'application/json'}
@@ -74,6 +75,17 @@ class UploaderTests(unittest.TestCase):
         excel_table.merge_into_master(str(cloud), [{'项目名称': '他人合同', '上传者ID': '同事乙', '合同ID': 'remote-1'}])
         found = self.post('/api/excel/cloud-search', {'query': '他人合同', 'people': {}, 'directIds': [], 'relatedIds': []})
         self.assertEqual(found['rows'][0]['row']['上传者ID'], '同事乙')
+
+
+class DefaultCloudPathTests(unittest.TestCase):
+    def test_intranet_share_is_the_default_and_unreachable_share_explains_login(self):
+        self.assertTrue(desktop.cloud_path())
+        try:
+            excel_table.master_path(r'\\unreachable.invalid\share\合同')
+        except excel_table.ExcelError as error:
+            self.assertIn('登录', str(error))
+        else:
+            self.fail('unreachable share must raise')
 
 
 if __name__ == '__main__':

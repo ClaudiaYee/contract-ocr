@@ -76,9 +76,20 @@
 @media(max-width:900px){.vault-root dialog.editor-dialog .editor-grid{grid-template-columns:1fr}}
 .readonly-banner{margin:0 0 16px;padding:10px 14px;border-radius:8px;background:#f1f5f9;color:#475569;font-size:13px;border:1px solid #e2e8f0}
 
-/* 单一合同上传口；上传到云端总表区域 */
+/* 单一合同上传口；「我的合同」在上传识别页下方 */
 .upload-entry-grid.single{grid-template-columns:1fr}
 .upload-cloud-section{margin-top:36px;padding-top:24px;border-top:1px solid var(--border,#e2e8f0)}
 .upload-cloud-section .view-header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
 #upload-cloud-share .cloud-confirm{display:flex;gap:8px;align-items:center;margin:8px 0 16px;font-size:13px}
 #upload-cloud-share .cloud-preview{max-height:320px}
+
+.my-contracts{margin-top:36px;padding-top:24px;border-top:1px solid var(--border,#e2e8f0)}
+.my-contracts .view-header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}
+/* 合同检索：搜索框居中，结果表格与「我的合同」相同并占满宽度 */
+#demo-searchPage{max-width:none}
+#demo-searchPage #demo-searchResults{max-width:none}
+#demo-searchPage .contract-table-wrap{margin-top:12px}
+#demo-searchPage .row-action-btn{border:0;background:transparent;padding:4px}
+#demo-searchPage .readonly-note{font-size:12px;color:var(--text-muted,#94a3b8);white-space:nowrap}
+#demo-searchPage mark{background:#fff0bd;color:inherit;padding:0 1px;border-radius:2px}
+#demo-searchPage .results-header{display:flex;justify-content:space-between;align-items:center}

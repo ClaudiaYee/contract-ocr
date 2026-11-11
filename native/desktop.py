@@ -196,6 +196,16 @@ def initialize_store():
         if path.name not in keep:cleanup_queue_file(path)
 
 
+# Team master workbook folder on the intranet share (log in once from File Explorer on each workstation).
+# CONTRACT_OCR_CLOUD_DEFAULT overrides it (tests and machines off the intranet; an empty value means no default).
+DEFAULT_CLOUD_PATH = os.environ.get('CONTRACT_OCR_CLOUD_DEFAULT', r'\\cnshavapfl73.pacrim.ey.net\data\GZ_GROUP\CLIENT\TRDA\合同\测试')
+
+
+def cloud_path():
+    configured=((get_record('config','cloudExcel') or {}).get('value') or {}).get('path','')
+    return str(configured).strip() or DEFAULT_CLOUD_PATH
+
+
 def default_uploader():
     """This computer's Windows / system account name, used until 系统设置 sets a 上传者ID."""
     import getpass
@@ -555,6 +565,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if path == '/api/config':
             values = {item['key']: item['value'] for item in records('config')}
             values['uploaderDefault'] = default_uploader()
+            values['cloudExcelDefault'] = DEFAULT_CLOUD_PATH
             return self.respond(200, values)
         if path == '/api/jobs':
             return self.respond(200, [{k: v for k, v in job.items() if k != 'result'} for job in job_records()])
@@ -677,7 +688,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 headers, rows = excel_table.read_xlsx(data)
                 return self.respond(200, {'headers': headers, 'rows': rows})
             payload = json.loads(data)
-            configured = ((get_record('config', 'cloudExcel') or {}).get('value') or {}).get('path', '')
+            configured = cloud_path()
             if path == '/api/excel/cloud-search':
                 query = payload.get('query')
                 if not isinstance(query, str) or len(query) > 200:

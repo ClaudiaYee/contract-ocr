@@ -48,10 +48,6 @@
         <button class="nav-item active" data-view="upload">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           <span>上传识别</span>
-        </button>
-        <button class="nav-item" data-view="list">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-          <span>合同列表</span>
           <span class="nav-badge" id="contractCount">0</span>
         </button>
         <button class="nav-item" data-view="vault-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><span>合同检索</span></button>
@@ -75,7 +71,7 @@
       <section class="view active" id="view-upload">
         <div class="view-header">
           <h2>批量识别合同 · 审计辅助 <small style="font-size:14px">v2.15.0</small></h2>
-          <p>支持拖拽上传或点击选择，系统将自动识别合同关键信息；识别完成后点结果右侧「编辑」即可整理合同信息、关键词、系统与标签</p>
+          <p>支持拖拽上传或点击选择，系统将自动识别合同关键信息；识别完成后在下方「我的合同」中点「编辑」整理合同信息、关键词、系统与标签</p>
         </div>
 
         <div class="settings-form" style="margin-bottom:16px">
@@ -119,39 +115,24 @@
         <!-- 解析结果 -->
         <div class="parse-results" id="parseResults"></div>
 
-        <!-- 上传到云端总表（原「合并到云盘总表」） -->
-        <section class="upload-cloud-section" id="upload-cloud-share" aria-labelledby="uploadCloudTitle">
-          <div class="view-header"><div><h2 id="uploadCloudTitle">上传到云端总表</h2><p>把本机合同合并到云盘同步文件夹里的 Excel 总表（按合同ID更新或追加，自动备份，保留总表里手工加的列）。总表路径在「系统设置」统一配置。</p></div>
-            <div class="view-actions"><button class="btn btn-ghost" id="exportSampleBtn" type="button">下载示例合同</button></div></div>
-          <div class="panel cloud-upload-panel">
-            <div class="cloud-select"><label for="cloudScope">上传范围</label><select id="cloudScope"><option value="all">全部本机合同</option><option value="current">合同列表当前筛选结果</option></select><span id="cloudTarget" class="cloud-notice"></span></div>
-            <div class="cloud-preview" id="cloudPreview"></div>
-            <label class="cloud-confirm"><input type="checkbox" id="cloudConfirm"> 我已预览，确认合并到云盘总表（「上传者ID」按本机设置填写）</label>
-            <div><button class="btn btn-primary" id="cloudUploadBtn" type="button">确认并合并到云盘总表</button> <span id="cloudStatus" class="cloud-status" role="status"></span></div>
-          </div>
-        </section>
-      </section>
-
-      <!-- 合同列表 -->
-      <section class="view" id="view-list">
-        <div class="view-header">
-          <div>
-            <h2>合同列表</h2>
-          </div>
+        <!-- 我的合同（原「合同列表」） -->
+        <section class="my-contracts" id="myContracts" aria-labelledby="myContractsTitle">
+          <div class="view-header">
+            <div><h2 id="myContractsTitle">我的合同</h2></div>
           <div class="view-actions">
             <input type="search" id="searchInput" placeholder="筛选项目/甲方/乙方/关键词/全文..." class="search-input">
             <button class="btn btn-ghost" id="exportExcelBtn" type="button" title="按当前列表导出 .xlsx">导出 Excel</button>
             <button class="btn btn-ghost" id="importExcelBtn" type="button" title="导入本工具导出的同格式 .xlsx，按合同ID更新或新增本机合同">导入 Excel</button>
             <input type="file" id="importExcelFile" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
-            <button class="btn btn-primary" id="cloudMergeBtn" type="button" title="把本机合同合并到云盘同步文件夹里的 Excel 总表">上传到云端总表</button>
+            <button class="btn btn-ghost" id="exportSampleBtn" type="button">下载示例合同</button>
+            <button class="btn btn-primary" id="cloudMergeBtn" type="button" title="把当前列表的合同合并到系统设置中的 Excel 总表">合并到云盘总表</button>
             <button class="btn btn-danger" id="clearAllBtn">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
               清空全部
             </button>
           </div>
-        </div>
-
-        <div class="contract-table-wrap" role="region" aria-label="合同列表表格" tabindex="0">
+          </div>
+        <div class="contract-table-wrap" role="region" aria-label="我的合同表格" tabindex="0">
           <table class="contract-table">
             <thead>
               <tr>
@@ -173,25 +154,21 @@
             </tbody>
           </table>
         </div>
+        </section>
       </section>
 
+      
       <section class="view" id="view-settings">
         <div class="view-header">
           <h2>系统设置</h2>
-          <p>统一配置：识别规则、上传者ID、云盘总表连接与数据维护。合同上传、编辑与上传到云端总表在「上传识别」中进行。</p>
+          <p>统一配置：本机并发、上传者ID、云盘总表路径与数据维护。</p>
         </div>
 
         <div class="settings-grid">
           <div class="settings-card">
-            <h3>识别规则配置</h3>
-            <p class="settings-desc">配置合同关键字段的提取正则表达式（高级）</p>
+            <h3>本机性能</h3>
+            <p class="settings-desc">识别时同时运行的本机进程数</p>
             <div class="settings-form">
-              <label>甲方识别关键词（用 | 分隔）</label>
-              <input type="text" id="cfgPartyA" placeholder="甲方|委托方|发包方|采购方">
-              <label>乙方识别关键词</label>
-              <input type="text" id="cfgPartyB" placeholder="乙方|受托方|承包方|供应商">
-              <label>金额识别关键词</label>
-              <input type="text" id="cfgAmount" placeholder="合同金额|总金额|签约金额">
               <label>本机并发（重启EXE生效）</label><select id="cfgWorkers"><option value="auto">自动（可用内存不足1.2GB时1个，一般2个，12线程以上3个）</option><option value="1">1个进程，节省内存</option><option value="2">2个进程，并行处理</option><option value="3">3个进程，12线程及以上CPU、内存充足</option><option value="4">4个进程，16线程及以上CPU、16GB内存</option></select><p id="nativeWorkerState"></p>
               <button class="btn btn-primary" id="saveCfgBtn">保存配置</button>
             </div>
@@ -219,11 +196,11 @@
           </div>
 
           <div class="settings-card">
-            <h3>云盘 Excel 总表</h3>
-            <p class="settings-desc">填写本机上由云盘（OneDrive、SharePoint、坚果云、百度网盘等）自动同步的文件夹，或其中某个 .xlsx 文件。在「上传识别 › 上传到云端总表」确认后，按合同ID更新已有行、追加新行，再由云盘自动同步；合同列表与检索也会搜索这个总表里他人上传的合同。</p>
+            <h3>云盘 Excel 总表（保存路径）</h3>
+            <p class="settings-desc">合并到云盘总表、合同检索都使用这个位置。默认是团队内网共享文件夹，首次使用前请先在文件资源管理器中打开该地址并用域账号登录。也可以填写其他同步文件夹，或其中某个 .xlsx 文件。</p>
             <div class="settings-form">
               <label for="cfgCloudExcel">同步文件夹或总表路径</label>
-              <input type="text" id="cfgCloudExcel" placeholder="例如 D:\OneDrive\合同库  或  D:\OneDrive\合同库\合同识别总表.xlsx">
+              <input type="text" id="cfgCloudExcel" placeholder="\\cnshavapfl73.pacrim.ey.net\data\GZ_GROUP\CLIENT\TRDA\合同\测试">
               <p class="settings-desc" style="margin:4px 0 0">填文件夹时总表名为「合同识别总表.xlsx」。每次合并前自动备份为「…备份.xlsx」；总表里手动加的列会保留。</p>
               <button class="btn btn-primary" id="saveCloudExcelBtn" type="button">保存路径</button>
               <span id="cloudExcelState" role="status"></span>
@@ -232,7 +209,7 @@
 
           <div class="settings-card">
             <h3>上传者ID</h3>
-            <p class="settings-desc">合并到云盘总表时写入「上传者ID」列，用于区分合同是谁上传的；在「合同检索」中，总表里不在本机的合同显示为他人上传。留空则使用本机 Windows 账户名。已上传合同的上传者不随修改变化。</p>
+            <p class="settings-desc">合并到云盘总表时写入 Excel 的「上传者ID」列，用来看出每份合同是谁上传的。留空则使用本机 Windows 账户名。已上传合同的上传者不随修改变化。</p>
             <div class="settings-form">
               <label for="cfgUploader">上传者ID</label>
               <input type="text" id="cfgUploader" maxlength="60">
@@ -248,7 +225,6 @@
               <li><strong>PDF 解析引擎：</strong> 原生版 PyMuPDF / 浏览器版 PDF.js（含中文字符映射）</li>
               <li><strong>扫描件 / 图片 OCR：</strong> PaddleOCR PP-OCRv4（原生 CPU / 浏览器离线）</li>
               <li><strong>业务语义匹配：</strong> 原生版内置 BGE 中文模型，识别业务表述</li>
-              <li><strong>图表引擎：</strong> Apache ECharts</li>
               <li><strong>本地存储：</strong> 原生版：程序旁文件夹内的 JSON 数据及原文件；浏览器版：IndexedDB</li>
               <li><strong>运行模式：</strong> 本机原生进程 / 浏览器备用 · v2.15.0</li>
               <li><strong>隐私保护：</strong> 云盘总表由指定同步目录提供，合同原件及识别全文保存在本机</li>
@@ -256,7 +232,7 @@
           </div>
         </div>
       </section>
-<div class="vault-root"><section class="view" id="view-vault-search"><section id="demo-searchPage"><div class="view-header"><div><h2>合同检索</h2><p>检索本机合同与云盘 Excel 总表中他人上传的合同。<span class="owner-tag mine">我上传</span> 可编辑；<span class="owner-tag others">他人上传</span> 只能查看。</p></div></div>
+<div class="vault-root"><section class="view" id="view-vault-search"><section id="demo-searchPage"><div class="view-header"><div><h2>合同检索</h2><p>检索本机合同与云盘 Excel 总表中他人上传的合同。他人上传的合同只能查看。</p></div></div>
 <div class="workspace search-workspace">
 <details class="search-advanced"><summary>高级筛选 · 行业、服务领域、Tag 及更多</summary><aside class="panel" aria-label="合同筛选"><div class="panel-title"><span class="step">01</span><h2>筛选条件</h2><button type="button" class="text-btn" id="demo-reset">重置全部</button></div>
 <div class="field"><label for="demo-level1">客户行业<span class="optional">三级联动</span></label><div class="industry"><select id="demo-level1" aria-label="一级行业"></select><select id="demo-level2" aria-label="二级行业" disabled></select><select id="demo-level3" aria-label="三级行业" disabled></select></div></div>
@@ -268,8 +244,9 @@
 <div class="field"><label for="demo-person">PIC / EIC / FIC 姓名</label><input id="demo-person" placeholder="输入任一负责人的姓名"></div>
 <details class="field"><summary>更多筛选：业务模式、交付及负责人</summary><div class="field"><label for="demo-businessModel">业务模式</label><input id="demo-businessModel"></div><div class="field"><label for="demo-serviceTerm">服务期限 / 项目周期</label><input id="demo-serviceTerm"></div><div class="field"><label for="demo-deliverables">交付成果</label><input id="demo-deliverables"></div><div class="field"><label for="demo-eic">EIC 姓名</label><input id="demo-eic"></div><div class="field"><label for="demo-pic">PIC 姓名</label><input id="demo-pic"></div></details><p class="hint" style="border-top:1px solid var(--line);padding-top:17px;margin-top:23px">未选择即不限。输入后按 Enter 或点 ＋ 添加；同一组多选满足任一项，各组条件同时满足。</p>
 </aside></details>
-<section class="right" aria-label="合同检索与结果"><div class="panel search-panel"><div class="panel-title"><h2>搜索合同与业务经验</h2></div><form id="demo-searchForm"><div class="search-row"><input id="demo-keyword" maxlength="200" placeholder="搜索关键词、行业、服务领域、Tag 或上传者ID" aria-label="搜索关键词"><button class="primary" type="submit">搜索</button></div></form><p class="hint">输入关键词即可搜索本机合同和云盘总表；高级筛选只作用于本机合同。</p><div class="suggestions"><span>试试搜索</span><button type="button" data-key="SOX">SOX</button><button type="button" data-key="财务转型">财务转型</button><button type="button" data-key="风险评估">风险评估</button><button type="button" data-key="流程优化">流程优化</button></div></div>
-<div id="demo-searchResults" hidden><div class="results-header"><h2>合同搜索结果<span class="count" id="demo-count" aria-live="polite"></span></h2><select id="demo-sort" aria-label="结果排序"><option value="default">默认排序</option><option value="desc">签约时间：最新优先</option><option value="asc">签约时间：最早优先</option></select></div><div class="summary" id="demo-summary"></div><section aria-labelledby="demo-directTitle"><div class="match-heading"><h3 id="demo-directTitle">A. 精准匹配</h3><span id="demo-directCount"></span></div><div class="cards" id="demo-cards"></div></section><section class="related-section" aria-labelledby="demo-relatedTitle"><div class="match-heading"><h3 id="demo-relatedTitle">B. 相关匹配</h3><span id="demo-relatedCount"></span></div><p class="hint" id="demo-relatedNote">相关匹配根据本机已有合同的业务标签生成，不代表服务相同。</p><div class="cards" id="demo-relatedCards"></div></section></div></section>
+<section class="right" aria-label="合同检索与结果"><div class="panel search-panel"><div class="panel-title"><h2>搜索合同与业务经验</h2></div><form id="demo-searchForm"><div class="search-row"><input id="demo-keyword" maxlength="200" placeholder="搜索关键词、行业、服务领域、Tag" aria-label="搜索关键词"><button class="primary" type="submit">搜索</button></div></form><p class="hint">输入关键词即可搜索本机合同和云盘总表；高级筛选只作用于本机合同。</p><div class="suggestions"><span>试试搜索</span><button type="button" data-key="SOX">SOX</button><button type="button" data-key="财务转型">财务转型</button><button type="button" data-key="风险评估">风险评估</button><button type="button" data-key="流程优化">流程优化</button></div></div>
+<div id="demo-searchResults" hidden><div class="results-header"><h2>合同搜索结果<span class="count" id="demo-count" aria-live="polite"></span></h2><select id="demo-sort" aria-label="结果排序"><option value="default">默认排序</option><option value="desc">签约时间：最新优先</option><option value="asc">签约时间：最早优先</option></select></div><div class="summary" id="demo-summary"></div>
+<div class="contract-table-wrap" role="region" aria-label="合同搜索结果表格" tabindex="0"><table class="contract-table"><thead><tr><th>项目名称</th><th>甲方</th><th>乙方</th><th>签约时间</th><th>原始关键词</th><th>PIC</th><th>EIC</th><th>FIC</th><th>操作</th></tr></thead><tbody id="demo-resultBody"></tbody></table></div></div></div></section>
 </div></section></section></div>
 <div class="vault-root vault-dialogs">
 <dialog id="demo-editorDialog" class="editor-dialog" aria-labelledby="demo-editorTitle"><div class="modal-head"><button type="button" class="close" id="demo-editorClose" aria-label="关闭编辑">×</button><h2 id="demo-editorTitle">编辑合同</h2><span class="save-status" id="demo-draftState"></span></div>

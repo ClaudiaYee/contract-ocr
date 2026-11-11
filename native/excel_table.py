@@ -218,10 +218,14 @@ def master_path(configured: str) -> Path:
     path = Path(os.path.expandvars(os.path.expanduser(text)))
     if path.suffix.lower() == '.xlsx':
         if not path.parent.is_dir():
+            if text.startswith('\\\\'):
+                raise ExcelError('无法访问内网共享文件夹：' + str(path.parent) + '。请先在文件资源管理器中打开并用域账号登录后重试')
             raise ExcelError('找不到总表所在的文件夹：' + str(path.parent))
         return path
     if path.is_dir():
         return path / MASTER_NAME
+    if text.startswith('\\\\'):
+        raise ExcelError('无法访问内网共享文件夹：' + text + '。请先在文件资源管理器地址栏打开该路径并用域账号登录，确认已连接公司内网后重试')
     raise ExcelError('路径需要是已存在的文件夹，或以 .xlsx 结尾的文件：' + str(path))
 
 

@@ -1,7 +1,7 @@
 /**
  * 合同检索页与合同编辑弹窗（原「合同整理与标签管理」）。
- * - 合同检索页：本机合同（我上传）即时过滤；输入关键词后同时查询设置中的云盘 Excel 总表，
- *   总表里不在本机的合同即他人上传，以卡片只读展示。
+ * - 合同检索页：本机合同即时过滤；输入关键词后同时查询设置中的云盘 Excel 总表，
+ *   总表里不在本机的合同即他人上传，只读。结果表格与「我的合同」相同。
  * - 编辑：上传识别结果卡片和合同列表的「编辑」打开同一弹窗；只编辑本机合同。
  */
 const Vault=(()=>{let api=null;
@@ -87,38 +87,40 @@ async function searchTeam(){
  render();
 }
 function words(text){return [...new Set(String(text||'').split(/[；;、]/).map(x=>x.trim()).filter(Boolean))];}
-function localCard(item,index){
- const c=item.contract,o=originals.find(x=>x.id===c.id)||{},tags=[...new Set([...(c.keywords||[]),...(c.specificTags||[]),...(c.customTags||[])])];
- const classes=[['行业分类',(c.industry||[]).filter(Boolean).join(' / ')],['服务领域',(c.services||[]).join('；')],['系统',(c.systems||[]).join('；')]].filter(([,v])=>v);
- return `<article class="card local-result" data-index="${index}"><div class="result-meta"><span class="owner-tag mine">我上传</span><span>${esc(o.uploadedByName||hooks.uploader())}</span><span>· ${esc(o.signDate||'日期未填写')}</span></div><h3>${highlight(c.name||'未识别项目')}${item.kind==='related'?`<span class="match-kind" title="${esc((item.reasons||[]).join('；'))}">相关</span>`:''}</h3><div class="result-tags">${tags.map(v=>`<span class="result-tag">${highlight(v)}</span>`).join('')}</div>${classes.length?`<p class="result-classification">${classes.map(([k,v])=>esc(k)+'：'+highlight(v)).join('　·　')}</p>`:''}<div class="card-actions"><button type="button" data-open="${index}">查看详情 ↗</button><button type="button" data-edit="${index}">编辑</button></div></article>`;
-}
-function remoteCard(item,index){
- const row=item.row,tags=words(row['原始关键词']),classes=[['甲方',row['甲方']],['乙方',row['乙方']],['PIC',row['PIC']],['EIC',row['EIC']]].filter(([,v])=>v);
- return `<article class="card remote-result" data-index="${index}"><div class="result-meta"><span class="owner-tag others">他人上传</span><span>${esc(row['上传者ID']||'上传者未记录')}</span><span>· ${esc(row['签约时间']||'日期未填写')}</span></div><h3>${highlight(row['项目名称']||'未识别项目')}${item.kind==='related'?'<span class="match-kind">相关</span>':''}</h3><div class="result-tags">${tags.map(v=>`<span class="result-tag">${highlight(v)}</span>`).join('')}</div>${classes.length?`<p class="result-classification">${classes.map(([k,v])=>esc(k)+'：'+highlight(v)).join('　·　')}</p>`:''}<div class="card-actions"><button type="button" data-row="${index}">查看合同信息 ↗</button><span class="readonly-note">只读</span></div></article>`;
+// 结果表格与「我的合同」相同的列；本机合同可查看 / 编辑 / 删除，他人上传（云盘总表）只读。
+const ICON_VIEW='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+const ICON_EDIT='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+const ICON_DELETE='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+function keywordCell(list){const shownWords=list.slice(0,6);return `<td class="kw-cell" title="${esc(list.join('；'))}"><div class="list-kws">${shownWords.length?shownWords.map(k=>`<span class="list-kw">${highlight(k)}</span>`).join('')+(list.length>shownWords.length?`<span class="list-kw more">+${list.length-shownWords.length}</span>`:''):'<span class="list-kw-empty">-</span>'}</div></td>`;}
+function resultRow(item,index){
+ const related=item.kind==='related'?`<span class="match-kind" title="${esc((item.reasons||[]).join('；'))}">相关</span>`:'';
+ if(item.type==='local'){
+  const c=item.contract,o=originals.find(x=>x.id===c.id)||{};
+  return `<tr data-index="${index}" data-id="${esc(c.id)}"><td><div class="project-name" title="${esc(o.projectName||c.name||'')}">${highlight(o.projectName||c.name||'未识别项目')}${related}</div></td><td>${highlight(o.partyA||'-')}</td><td>${highlight(o.partyB||'-')}</td><td>${esc(o.signDate||'-')}</td>${keywordCell(c.keywords||[])}${['pic','eic','fic'].map(k=>`<td class="person-cell">${highlight(c[k]||'-')}</td>`).join('')}<td><div class="row-actions"><button class="row-action-btn" type="button" data-open="${index}" title="查看详情">${ICON_VIEW}</button><button class="row-action-btn" type="button" data-edit="${index}" title="编辑">${ICON_EDIT}</button><button class="row-action-btn danger" type="button" data-delete="${index}" title="删除">${ICON_DELETE}</button></div></td></tr>`;
+ }
+ const row=item.row;
+ return `<tr data-index="${index}" class="row-remote"><td><div class="project-name" title="${esc(row['项目名称']||'')}">${highlight(row['项目名称']||'未识别项目')}${related}</div></td><td>${highlight(row['甲方']||'-')}</td><td>${highlight(row['乙方']||'-')}</td><td>${esc(row['签约时间']||'-')}</td>${keywordCell(words(row['原始关键词']))}${['PIC','EIC','FIC'].map(k=>`<td class="person-cell">${highlight(row[k]||'-')}</td>`).join('')}<td><div class="row-actions"><button class="row-action-btn" type="button" data-row="${index}" title="查看（他人上传，只读）">${ICON_VIEW}</button><span class="readonly-note">只读</span></div></td></tr>`;
 }
 function render(){
  if(discarded)return;
  const query=$('keyword').value.trim(),active=!!query||advancedActive();
  $('searchPage').classList.toggle('has-results',active);$('searchResults').hidden=!active;
- for(const key of ['cards','relatedCards','summary','count','directCount','relatedCount'])$(key).textContent='';
+ for(const key of ['summary','count'])$(key).textContent='';$('resultBody').innerHTML='';
  shown=[];if(!active)return;
  const matches=filterLocal(query),current=remote.key===criteriaKey()?remote:null,known=new Set(contracts.map(c=>c.id));
  const serverLocal=new Set((current?.rows||[]).map(x=>x.row['合同ID']).filter(id=>id&&known.has(id)));
  const local=contracts.filter(c=>matches.has(c.id)||serverLocal.has(c.id)).map(c=>({type:'local',contract:c,kind:matches.get(c.id)?.kind||'direct',reasons:matches.get(c.id)?.reasons||[],date:(originals.find(o=>o.id===c.id)||{}).signDate||''}));
  const others=(current?.rows||[]).filter(x=>!x.row['合同ID']||!known.has(x.row['合同ID'])).map(x=>({type:'remote',row:x.row,kind:x.kind,date:x.row['签约时间']||''}));
  shown=[...local,...others];
- const sort=$('sort').value;if(sort!=='default')shown.sort((a,b)=>{if(!a.date||!b.date)return Number(!a.date)-Number(!b.date);return a.date.localeCompare(b.date)*(sort==='asc'?1:-1);});
- const cards=shown.map((item,i)=>item.type==='local'?localCard(item,i):remoteCard(item,i));
- const direct=shown.map((x,i)=>[x,cards[i]]).filter(([x])=>x.kind!=='related'),related=shown.map((x,i)=>[x,cards[i]]).filter(([x])=>x.kind==='related');
+ const sort=$('sort').value,rank=x=>x.kind==='related'?1:0;
+ shown.sort((a,b)=>sort==='default'?rank(a)-rank(b):(!a.date||!b.date)?Number(!a.date)-Number(!b.date):a.date.localeCompare(b.date)*(sort==='asc'?1:-1));
  $('count').textContent=`${shown.length} 条结果`;
- $('directCount').textContent=`${direct.length} 份`;$('relatedCount').textContent=`${related.length} 份`;
- $('cards').innerHTML=direct.length?direct.map(([,h])=>h).join(''):'<div class="empty compact">没有找到匹配结果，请尝试其他关键词。</div>';
- $('relatedCards').innerHTML=related.map(([,h])=>h).join('');$('relatedCards').closest('.related-section').hidden=!related.length;
+ $('resultBody').innerHTML=shown.length?shown.map(resultRow).join(''):'<tr class="empty-row"><td colspan="9">没有找到匹配结果，请尝试其他关键词。</td></tr>';
  const parts=[`本机合同 ${local.length} 份`];
  if(!query)parts.push('输入关键词可同时检索云盘总表');
  else if(current?.loading)parts.push('正在检索云盘总表…');
  else if(current?.error)parts.push(`<span class="error">云盘总表：${esc(current.error)}</span>`);
- else if(current)parts.push(`云盘总表他人上传 ${others.length} 份${current.total>current.rows.length?`（共 ${current.total} 份，显示前 ${current.rows.length} 份）`:''}`);
+ else if(current)parts.push(`他人上传 ${others.length} 份${current.total>current.rows.length?`（共 ${current.total} 份，显示前 ${current.rows.length} 份）`:''}`);
  $('summary').innerHTML=parts.join(' · ');
 }
 function reset(){[1,2,3].forEach(n=>{$('level'+n).value='';$('region'+n).value='';});options($('level2'),[],'全部二级行业');options($('level3'),[],'全部三级行业');$('level2').disabled=$('level3').disabled=true;['keyword','person','eic','pic',...TEXT_FILTERS].forEach(id=>$(id).value='');for(const key of Object.keys(filterState)){filterState[key]=[];$('filter-'+key).value='';drawPicker(key);$('menu-'+key).hidden=true;$('filter-'+key).setAttribute('aria-expanded','false');}$('sort').value='default';refreshRegionFilters();remote={key:null,rows:[],total:0,loading:false,error:''};render();}
@@ -134,15 +136,17 @@ function highlight(value){const terms=highlightTerms();let text=esc(value);if(!t
 // 他人合同只读详情：展示云盘总表这一行的全部列。
 function showRow(row){
  $('detailTitle').textContent=row['项目名称']||'未识别项目';
- $('vaultDetailBody').innerHTML=`<p class="hint">他人上传，来自云盘 Excel 总表，仅可查看。</p><div class="facts">${Object.entries(row).filter(([label])=>label!=='项目名称').map(([label,value])=>`<div><span>${esc(label)}</span><strong>${value?highlight(value):'—'}</strong></div>`).join('')}</div>`;
+ $('vaultDetailBody').innerHTML=`<p class="hint">他人上传的合同（来自云盘 Excel 总表），仅可查看。</p><div class="facts">${Object.entries(row).filter(([label])=>label!=='项目名称').map(([label,value])=>`<div><span>${esc(label)}</span><strong>${value?highlight(value):'—'}</strong></div>`).join('')}</div>`;
  $('detail').showModal();
 }
-for(const box of [$('cards'),$('relatedCards')])box.addEventListener('click',e=>{
- const open=e.target.closest('[data-open]'),edit=e.target.closest('[data-edit]'),row=e.target.closest('[data-row]');
+$('resultBody').addEventListener('click',e=>{
+ const open=e.target.closest('[data-open]'),edit=e.target.closest('[data-edit]'),del=e.target.closest('[data-delete]'),row=e.target.closest('[data-row]');
  if(open)hooks.openDetail(shown[Number(open.dataset.open)].contract.id);
  else if(edit)openEditor(shown[Number(edit.dataset.edit)].contract.id);
+ else if(del)hooks.deleteContract(shown[Number(del.dataset.delete)].contract.id);
  else if(row)showRow(shown[Number(row.dataset.row)].row);
 });
+$('resultBody').addEventListener('dblclick',e=>{const tr=e.target.closest('tr[data-index]');if(!tr)return;const item=shown[Number(tr.dataset.index)];if(item.type==='local')hooks.openDetail(item.contract.id);else showRow(item.row);});
 $('close').onclick=()=>$('detail').close();
 $('detail').addEventListener('click',e=>{if(e.target===$('detail')){const r=$('detail').getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)$('detail').close();}});
 
