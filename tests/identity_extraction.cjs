@@ -42,6 +42,21 @@ const competing='项目名称：信息系统服务项目\n关于：'+subject+'\n
 assert.equal(E.extractProjectName(competing),'信息系统服务项目');
 assert.equal(E.extractProjectName(competing,undefined,{preferSubject:true}),subject);
 const oldEy={id:'legacy-ey',uploadCategory:'ey-template',identityExtractionVersion:2,projectName:'未识别项目',rawText:'关于：'+subject,reviewerNotes:'keep',knowledgeProfile:{customTags:['keep']}};
-const fixedEy=E.repairIdentity(oldEy);assert.equal(fixedEy.projectName,subject);assert.equal(fixedEy.identityExtractionVersion,3);assert.equal(fixedEy.reviewerNotes,'keep');assert.deepEqual(fixedEy.knowledgeProfile,oldEy.knowledgeProfile);
+const fixedEy=E.repairIdentity(oldEy);assert.equal(fixedEy.projectName,subject);assert.equal(fixedEy.identityExtractionVersion,4);assert.equal(fixedEy.reviewerNotes,'keep');assert.deepEqual(fixedEy.knowledgeProfile,oldEy.knowledgeProfile);
 assert.equal(E.repairIdentity({...oldEy,manualFieldsEditedAt:1}).projectName,'未识别项目');
 console.log('PASS EY subject priority, business engagement-letter suffix, wrapped/standalone/spaced headings, body rejection and legacy automatic repair');
+
+// 折行的单位名称：前半段在标签上一行，或标签后只有前半段。
+for(const [text,a,b] of [
+ ['广东丸美生物\n甲方：技术股份有限公司\n安永（中国）企业咨询\n乙方：有限公司','广东丸美生物技术股份有限公司','安永（中国）企业咨询有限公司'],
+ ['甲方：广东丸美生物\n技术股份有限公司\n乙方：安永（中国）企业咨询有限公司','广东丸美生物技术股份有限公司','安永（中国）企业咨询有限公司'],
+ ['深圳顺丰泰森\n甲方：控股（集团）有限公司\n乙方：安永（中国）企业咨询有限公司','深圳顺丰泰森控股（集团）有限公司','安永（中国）企业咨询有限公司'],
+ ['信息系统评估服务协议\n甲方：科技有限公司','科技有限公司',''],
+ ['甲方：张三\n乙方：安永（中国）企业咨询有限公司','张三','安永（中国）企业咨询有限公司'],
+])assert.deepEqual([E.extractPartyA(text),E.extractPartyB(text)],[a,b],text);
+// 已保存的旧结果：只替换为包含它的完整名称；手工编辑过的不动。
+const wrapped={id:'w',identityExtractionVersion:3,partyA:'技术股份有限公司',partyB:'安永（中国）企业咨询有限公司',rawText:'广东丸美生物\n甲方：技术股份有限公司\n乙方：安永（中国）企业咨询有限公司'};
+const wrappedFix=E.repairIdentity(wrapped);assert.equal(wrappedFix.partyA,'广东丸美生物技术股份有限公司');assert.equal(wrappedFix.partyB,wrapped.partyB);assert.equal(wrappedFix.identityExtractionVersion,4);assert.equal(wrappedFix.previousAutomaticIdentity.partyA,'技术股份有限公司');
+assert.equal(E.repairIdentity({...wrapped,manualFieldsEditedAt:'x'}).partyA,'技术股份有限公司');
+assert.equal(E.repairIdentity(wrappedFix),wrappedFix);
+console.log('PASS wrapped company names across lines, one-time repair of saved fragments');
