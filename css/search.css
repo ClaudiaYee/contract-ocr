@@ -95,3 +95,4 @@
 #demo-searchPage .results-header{display:flex;justify-content:space-between;align-items:center}
 #demo-searchPage .match-mode{display:flex;justify-content:center;align-items:center;gap:8px;margin-top:14px;font-size:13px;color:var(--text-secondary,#64748b)}
 #demo-searchPage .match-mode select{width:auto;padding:5px 32px 5px 10px;border:1px solid var(--border,#e2e8f0);border-radius:6px;background-color:var(--bg-card,#fff);font-size:13px}
+#demo-searchPage .list-kw.from-text{border-style:dashed}

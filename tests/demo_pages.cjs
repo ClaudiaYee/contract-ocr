@@ -23,6 +23,9 @@ const assert=require('assert'),path=require('path'),fs=require('fs'),os=require(
   await page.locator('#demo-keyword').fill('Synthetic actual contract');
   await page.waitForFunction(()=>document.getElementById('demo-summary').textContent.includes('设置'));
   assert.equal(await page.locator('#demo-resultBody tr[data-id]').count(),1);assert.equal(await page.locator('#demo-resultBody tr.row-remote').count(),0);
+  // 搜索词只在合同全文中出现：结果的关键词列补上该词（仅显示，不保存）
+  await page.locator('#demo-keyword').fill('人民币');await page.waitForFunction(()=>document.querySelector('#demo-resultBody .list-kw.from-text mark')?.textContent==='人民币');
+  assert(!JSON.stringify((await page.evaluate(()=>Storage.getAllContracts()))[0].knowledgeProfile||{}).includes('人民币'));
   await page.locator('#demo-keyword').fill('  ');await page.waitForFunction(()=>document.getElementById('demo-searchResults').hidden);
   await openEditor('synthetic-record');assert.equal(await page.locator('#demo-editAmount').count(),0,'amount removed from contract info');assert.equal(await page.locator('#demo-editEnterpriseSize').count(),0,'enterprise size removed');assert.equal(await page.locator('#demo-editEic').inputValue(),'甲某');assert.equal(await page.locator('#demo-editIndustry3').inputValue(),'商业银行');
   await page.locator('#demo-editOriginal').fill('服务内容：出具SOC 2 Type II报告。');await page.locator('#demo-generateTags').click();assert(!(await page.locator('#demo-specificTagsEditor').innerText()).includes('SOC 2'));assert((await page.locator('#demo-specificTagsEditor').innerText()).includes('ITGC'));
