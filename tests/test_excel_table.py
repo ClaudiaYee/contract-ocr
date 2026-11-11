@@ -74,6 +74,18 @@ class ExcelTableTest(unittest.TestCase):
             with self.assertRaises(e.ExcelError):
                 e.merge_into_master(str(Path(folder) / 'missing'), [])
 
+    def test_search_accepts_several_keywords(self):
+        self.assertEqual(e.search_terms(' SOX，ITGC; 深圳、 财务 '), ['sox', 'itgc', '深圳', '财务'])
+        with tempfile.TemporaryDirectory() as folder:
+            e.merge_into_master(folder, [
+                {'项目名称': '深圳SOX项目', '原始关键词': 'SOX；ITGC', '合同ID': 'a'},
+                {'项目名称': '广州SOX项目', '原始关键词': 'SOX', '合同ID': 'b'},
+                {'项目名称': '深圳财务转型', '原始关键词': '财务转型', '合同ID': 'c'}])
+            ids = lambda result: sorted(row['row']['合同ID'] for row in result['rows'])
+            self.assertEqual(ids(e.search_master(folder, '深圳，SOX', {}, None, set(), set())), ['a'])
+            self.assertEqual(ids(e.search_master(folder, '深圳 SOX', {}, None, set(), set(), match_any=True)), ['a', 'b', 'c'])
+            self.assertEqual(ids(e.search_master(folder, 'ITGC;财务转型', {}, None, set(), set(), match_any=True)), ['a', 'c'])
+
 
 if __name__ == '__main__':
     unittest.main()

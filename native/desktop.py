@@ -705,7 +705,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     return self.respond(400, {'error': '搜索筛选条件格式不正确'})
                 return self.respond(200, excel_table.search_master(
                     configured, query, people, set(eligible) if eligible is not None else None,
-                    set(direct), set(related)))
+                    set(direct), set(related), payload.get('matchAny') is True))
             rows = payload.get('rows')
             if not isinstance(rows, list) or not all(isinstance(row, dict) for row in rows):
                 return self.respond(400, {'error': '表格数据格式不正确'})

@@ -46,10 +46,19 @@ const plain=v=>VaultModel.normalizeSearch(v);
 function advancedActive(){return [1,2,3].some(n=>$('level'+n).value||$('region'+n).value)||['person','eic','pic',...TEXT_FILTERS].some(k=>$(k).value.trim())||Object.values(filterState).some(v=>v.length);}
 function people(){return Object.fromEntries(['person','eic','pic'].map(key=>[key,$(key).value.trim()]));}
 // 列表文字搜索同时覆盖原列表字段（甲乙方、来源文件、上传者ID）与检索字段（关键词、Tag、行业等）。
-function matchLocal(p,q){
+// 多个关键词：用空格、逗号、分号或顿号分隔；「全部包含」需每个词都命中，「包含任一」命中一个即可。
+const splitTerms=q=>String(q||'').split(/[\s,，;；、]+/).map(x=>x.trim()).filter(Boolean);
+const matchAny=()=>$('matchMode').value==='any';
+function matchTerm(p,q){
  const m=VaultModel.matchContract(p,q,businessLinks);if(m.kind!=='none')return m;
  const o=originals.find(c=>c.id===p.id)||{};
  return [o.partyA,o.partyB,o.sourceFile,o.signDate,o.uploadedByName,o.uploadedByUsername].some(v=>v&&plain(v).includes(plain(q)))?{kind:'direct',reasons:[]}:m;
+}
+function matchLocal(p,q){
+ const terms=splitTerms(q);if(terms.length<=1)return matchTerm(p,terms[0]||q);
+ const results=terms.map(t=>matchTerm(p,t)),hit=results.filter(r=>r.kind!=='none');
+ if(matchAny()?!hit.length:hit.length<terms.length)return {kind:'none',reasons:[]};
+ return {kind:hit.some(r=>r.kind==='direct')&&(matchAny()||hit.every(r=>r.kind==='direct'))?'direct':'related',reasons:[...new Set(hit.flatMap(r=>r.reasons||[]))]};
 }
 function filterLocal(query){
  const levels=[1,2,3].map(n=>$('level'+n).value),regions=[1,2,3].map(n=>$('region'+n).value),who=people(),matches=new Map();
@@ -70,7 +79,7 @@ function filterLocal(query){
 // 检索结果：本机合同（我上传，可编辑）+ 云盘 Excel 总表里不在本机的合同（他人上传，只读），以卡片展示。
 // 本机部分即时过滤；云盘总表在输入后自动查询（防抖），条件变化即失效。
 let remote={key:null,rows:[],total:0,loading:false,error:''},requestId=0,timer=null,remoteTimer=null,shown=[];
-function criteriaKey(){return JSON.stringify({q:$('keyword').value.trim(),p:people(),f:filterState,v:[1,2,3].flatMap(n=>[$('level'+n).value,$('region'+n).value]),t:TEXT_FILTERS.map(k=>$(k).value)});}
+function criteriaKey(){return JSON.stringify({q:$('keyword').value.trim(),any:matchAny(),p:people(),f:filterState,v:[1,2,3].flatMap(n=>[$('level'+n).value,$('region'+n).value]),t:TEXT_FILTERS.map(k=>$(k).value)});}
 function changed(){if(discarded)return;clearTimeout(timer);timer=setTimeout(render,120);clearTimeout(remoteTimer);if($('keyword').value.trim())remoteTimer=setTimeout(searchTeam,450);}
 async function searchTeam(){
  if(discarded)return;clearTimeout(remoteTimer);
@@ -80,7 +89,7 @@ async function searchTeam(){
  const local=filterLocal(query.toLowerCase()),advanced=advancedActive();
  try{
   const {rows,total}=await hooks.searchCloud({query,people:people(),eligibleIds:advanced?[...filterLocal('').keys()]:null,
-   directIds:[...local].filter(([,m])=>m.kind==='direct').map(([id])=>id),relatedIds:[...local].filter(([,m])=>m.kind==='related').map(([id])=>id)});
+   directIds:[...local].filter(([,m])=>m.kind==='direct').map(([id])=>id),relatedIds:[...local].filter(([,m])=>m.kind==='related').map(([id])=>id),matchAny:matchAny()});
   if(id!==requestId||discarded)return;
   remote={key,rows,total,loading:false,error:''};
  }catch(error){if(id!==requestId||discarded)return;remote={key,rows:[],total:0,loading:false,error:error.message};}
@@ -126,12 +135,12 @@ function render(){
 function reset(){[1,2,3].forEach(n=>{$('level'+n).value='';$('region'+n).value='';});options($('level2'),[],'全部二级行业');options($('level3'),[],'全部三级行业');$('level2').disabled=$('level3').disabled=true;['keyword','person','eic','pic',...TEXT_FILTERS].forEach(id=>$(id).value='');for(const key of Object.keys(filterState)){filterState[key]=[];$('filter-'+key).value='';drawPicker(key);$('menu-'+key).hidden=true;$('filter-'+key).setAttribute('aria-expanded','false');}$('sort').value='default';refreshRegionFilters();remote={key:null,rows:[],total:0,loading:false,error:''};render();}
 $('region1').onchange=()=>{$('region2').value='';$('region3').value='';refreshRegionFilters();changed();};
 $('region2').onchange=()=>{$('region3').value='';refreshRegionFilters();changed();};
-$('region3').addEventListener('change',changed);$('level3').addEventListener('change',changed);$('sort').addEventListener('change',render);
+$('region3').addEventListener('change',changed);$('level3').addEventListener('change',changed);$('matchMode').addEventListener('change',changed);$('sort').addEventListener('change',render);
 ['keyword','person','eic','pic',...TEXT_FILTERS].forEach(id=>$(id).addEventListener('input',changed));
 $('reset').onclick=reset;
 $('searchForm').onsubmit=e=>{e.preventDefault();for(const key of Object.keys(filterState))if($('filter-'+key).value.trim())addFilter(key,$('filter-'+key).value);render();searchTeam();};
 $('searchPage').querySelectorAll('[data-key]').forEach(b=>b.onclick=()=>{$('keyword').value=b.dataset.key;render();searchTeam();});
-function highlightTerms(){return $('keyword').value.trim().split(/\s+/).filter(Boolean).sort((a,b)=>b.length-a.length);}
+function highlightTerms(){return splitTerms($('keyword').value).sort((a,b)=>b.length-a.length);}
 function highlight(value){const terms=highlightTerms();let text=esc(value);if(!terms.length)return text;const pattern=terms.map(v=>esc(v).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|');return text.replace(new RegExp(pattern,'gi'),v=>`<mark>${v}</mark>`);}
 // 他人合同只读详情：展示云盘总表这一行的全部列。
 function showRow(row){

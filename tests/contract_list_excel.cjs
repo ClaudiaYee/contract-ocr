@@ -76,6 +76,15 @@ await p.locator('#demo-keyword').fill('other');
 const second=p.locator('#demo-resultBody tr.row-remote').filter({hasText:'other from second master'});
 await second.waitFor({timeout:5000}).catch(async error=>{console.error(await p.locator('#demo-summary').innerText(),await p.locator('#demo-resultBody').innerText());throw error;});
 assert.equal(await p.locator('#demo-resultBody tr.row-remote').count(),1);await second.locator('[data-row]').click();assert((await p.locator('#demo-vaultDetailBody').innerText()).includes('同事乙'));await p.locator('#demo-close').click();
+// 多个关键词：逗号 / 分号 / 空格分隔；全部包含 vs 包含任一
+await p.locator('#demo-keyword').fill('other，second');
+await p.waitForFunction(()=>document.querySelectorAll('#demo-resultBody tr.row-remote').length===1&&!document.getElementById('demo-summary').textContent.includes('正在'));
+await p.locator('#demo-keyword').fill('second；广州视睿');
+await p.waitForFunction(()=>document.querySelector('#demo-resultBody .empty-row')&&!document.getElementById('demo-summary').textContent.includes('正在'));
+await p.locator('#demo-matchMode').selectOption('any');
+await p.waitForFunction(()=>document.querySelector('#demo-resultBody tr[data-id="a1"]')&&document.querySelectorAll('#demo-resultBody tr.row-remote').length===1&&!document.getElementById('demo-summary').textContent.includes('正在'));
+assert.equal(await p.locator('#demo-resultBody mark').filter({hasText:'second'}).count()>0,true);
+await p.locator('#demo-matchMode').selectOption('all');
 await p.locator('#demo-keyword').fill('广州视睿');
 await p.waitForFunction(()=>document.querySelector('#demo-resultBody tr[data-id="a1"]')&&!document.querySelector('#demo-resultBody tr.row-remote')&&!document.getElementById('demo-summary').textContent.includes('正在'));
 await p.locator('#demo-keyword').fill('');

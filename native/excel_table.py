@@ -229,12 +229,21 @@ def master_path(configured: str) -> Path:
     raise ExcelError('路径需要是已存在的文件夹，或以 .xlsx 结尾的文件：' + str(path))
 
 
+TERM_SEPARATORS = re.compile(r'[\s,，;；、]+')
+
+
+def search_terms(query: str) -> list[str]:
+    """Several keywords separated by spaces, commas, semicolons or 、."""
+    return [term for term in TERM_SEPARATORS.split(unicodedata.normalize('NFKC', query or '').casefold()) if term]
+
+
 def search_master(configured: str, query: str, people: dict, eligible_ids: set | None,
-                  direct_ids: set, related_ids: set) -> dict:
+                  direct_ids: set, related_ids: set, match_any: bool = False) -> dict:
     def normalize(text):
         return unicodedata.normalize('NFKC', text).casefold()
 
-    terms = normalize(query).split()
+    terms = search_terms(query)
+    combine = any if match_any else all
     if not terms and not any(people.values()) and eligible_ids is None:
         return {'rows': [], 'total': 0}
     path = master_path(configured)
@@ -259,7 +268,7 @@ def search_master(configured: str, query: str, people: dict, eligible_ids: set |
         if person and not any(person in normalize(public_row[role]) for role in ('PIC', 'EIC', 'FIC')):
             continue
         fields = [normalize(value) for value in public_row.values()]
-        direct = identifier in direct_ids or all(any(term in field for field in fields) for term in terms)
+        direct = identifier in direct_ids or (bool(terms) and combine(any(term in field for field in fields) for term in terms))
         if direct or identifier in related_ids:
             total += 1
             if len(matches) < 100:
