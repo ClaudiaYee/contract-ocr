@@ -12,18 +12,16 @@ let contracts=[],originals=[],saving=false,discarded=false;
 const $=id=>document.getElementById('demo-'+id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const serviceOptions=ServiceContent.domainNames;
-function validSaved(c){return c&&typeof c.name==='string'&&['industry','region'].every(k=>c[k].every((v,i)=>!v||c[k].slice(0,i).every(Boolean)));}
 function extendIndustry(path){const[a,b,c]=path;if(!a)return;industry[a]??={};if(b){industry[a][b]??=[];if(c&&!industry[a][b].includes(c))industry[a][b].push(c);}}
 function options(el,items,label){el.replaceChildren(new Option(label,''),...items.map(x=>new Option(x,x)));}
 
 // ===================== 检索筛选 =====================
-options($('level1'),Object.keys(industry),'全部一级行业');options($('level2'),[],'全部二级行业');options($('level3'),[],'全部三级行业');
-$('level1').addEventListener('change',()=>{options($('level2'),Object.keys(industry[$('level1').value]||{}),'全部二级行业');$('level2').disabled=!$('level1').value;options($('level3'),[],'全部三级行业');$('level3').disabled=true;changed();});
-$('level2').addEventListener('change',()=>{options($('level3'),industry[$('level1').value]?.[$('level2').value]||[],'全部三级行业');$('level3').disabled=!$('level2').value;changed();});
 // 多选筛选：组内任一命中，组间同时满足；空数组表示不限。
 const filterState={services:[],specificTags:[],needs:[],systems:[]};
-const TEXT_FILTERS=['businessModel','serviceTerm','deliverables'];
-const regionTree={'华南':{'广东':['深圳','广州','珠海'],'广西':['南宁'],'海南':['海口']},'华东':{'上海':['上海'],'江苏':['南京','苏州'],'浙江':['杭州','宁波'],'山东':['济南','青岛'],'安徽':['合肥'],'福建':['福州','厦门'],'江西':['南昌']},'华北':{'北京':['北京'],'天津':['天津'],'河北':['石家庄'],'山西':['太原'],'内蒙古':['呼和浩特']},'华中':{'湖北':['武汉'],'湖南':['长沙'],'河南':['郑州']},'西南':{'四川':['成都'],'重庆':['重庆'],'云南':['昆明'],'贵州':['贵阳'],'西藏':['拉萨']},'西北':{'陕西':['西安'],'甘肃':['兰州'],'青海':['西宁'],'宁夏':['银川'],'新疆':['乌鲁木齐']},'东北':{'辽宁':['沈阳'],'吉林':['长春'],'黑龙江':['哈尔滨']}};
+const TEXT_FILTERS=['serviceTerm','deliverables'];
+// Engagement 筛选：按合同上保存的 Engagement 字段匹配。
+const ENGAGEMENT_FILTERS={engagementCode:['engagementCode'],engagementName:['engagementName','engagementCodeDescription']};
+const FILTER_INPUTS=['person','eic','pic',...TEXT_FILTERS,...Object.keys(ENGAGEMENT_FILTERS)];
 // 有方向的参考关系：业务相关，绝不代表服务相同。
 const businessLinks=[
  {from:['数据咨询','数据核查','数据治理'],to:['数据治理','数据安全','经营分析','数据','对账'],why:'数据质量与管理相关，可参考数据口径、核对或安全管理经验'},
@@ -39,11 +37,9 @@ function drawPicker(key){const root=$('picker-'+key);root.querySelector('.select
 function drawPickerMenu(key){const query=$('filter-'+key).value.trim(),values=pickerSuggestions(key);$('menu-'+key).innerHTML=values.map(v=>`<button type="button" role="option" aria-selected="false" data-value="${esc(v)}">${esc(v)}</button>`).join('')+(query&&!pickerOptions(key).some(v=>v.toLowerCase()===query.toLowerCase())?`<button type="button" role="option" aria-selected="false" data-value="${esc(query)}">＋ 添加“${esc(query)}”</button>`:'')+(!values.length&&!query?'<span class="hint">暂无其他选项，可输入新名称</span>':'');}
 function addFilter(key,value){value=value.trim();if(!value)return;if(key==='services'){const known=pickerOptions('services').find(v=>VaultModel.normalizeSearch(ServiceContent.canonicalDomain(v))===VaultModel.normalizeSearch(ServiceContent.canonicalDomain(value)));if(!known){$('filter-'+key).setCustomValidity('请选择领域库中的名称；新业务领域可在本地领域库中添加，ITGC 等活动使用具体服务筛选。');$('filter-'+key).reportValidity();return;}value=known;}$('filter-'+key).setCustomValidity('');if(!filterState[key].some(x=>x.toLowerCase()===value.toLowerCase()))filterState[key].push(value);$('filter-'+key).value='';drawPicker(key);changed();}
 function initPickers(){for(const [key,label] of Object.entries({services:'服务领域',specificTags:'具体服务',needs:'客户业务诉求',systems:'涉及系统'})){const root=$('picker-'+key);root.innerHTML=`<div class="selected-tags"></div><div class="picker-entry"><input id="demo-filter-${key}" maxlength="120" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="demo-menu-${key}" aria-label="${label}：输入或多选" placeholder="输入或选择，可多选"><button type="button" class="picker-add" aria-label="添加${label}">＋</button></div><div class="picker-menu" id="demo-menu-${key}" role="listbox" aria-label="${label}可选项" hidden></div>`;const input=$('filter-'+key),menu=$('menu-'+key);const show=()=>{input.setCustomValidity('');drawPickerMenu(key);menu.hidden=false;input.setAttribute('aria-expanded','true');};input.addEventListener('focus',show);input.addEventListener('input',show);input.addEventListener('keydown',e=>{if(e.isComposing)return;if(e.key==='Enter'){e.preventDefault();addFilter(key,input.value);show();}if(e.key==='ArrowDown'){e.preventDefault();show();menu.querySelector('button')?.focus();}if(e.key==='Escape'){menu.hidden=true;input.setAttribute('aria-expanded','false');}});root.addEventListener('click',e=>{const remove=e.target.closest('[data-remove]'),item=e.target.closest('[data-value]');if(remove){filterState[key].splice(Number(remove.dataset.remove),1);drawPicker(key);changed();}else if(item){addFilter(key,item.dataset.value);input.focus();}else if(e.target.closest('.picker-add')){addFilter(key,input.value);input.focus();}});menu.addEventListener('keydown',e=>{const buttons=[...menu.querySelectorAll('button')],i=buttons.indexOf(document.activeElement);if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();buttons[(i+(e.key==='ArrowDown'?1:-1)+buttons.length)%buttons.length]?.focus();}if(e.key==='Escape'){input.focus();menu.hidden=true;input.setAttribute('aria-expanded','false');}});drawPicker(key);}document.addEventListener('click',e=>{if(discarded)return;for(const key of Object.keys(filterState))if(!$('picker-'+key).contains(e.target)){$('menu-'+key).hidden=true;$('filter-'+key).setAttribute('aria-expanded','false');}});}
-function allRegionData(){const tree=JSON.parse(JSON.stringify(regionTree));contracts.forEach(c=>{if(c.region.every(Boolean)){tree[c.region[0]]??={};tree[c.region[0]][c.region[1]]??=[];if(!tree[c.region[0]][c.region[1]].includes(c.region[2]))tree[c.region[0]][c.region[1]].push(c.region[2]);}});return tree;}
-function refreshRegionFilters(){const values=[1,2,3].map(n=>$('region'+n).value),tree=allRegionData();options($('region1'),Object.keys(tree),'全部大区');$('region1').value=values[0];options($('region2'),Object.keys(tree[values[0]]||{}),'全部省份');$('region2').value=values[1];options($('region3'),tree[values[0]]?.[values[1]]||[],'全部城市');$('region3').value=values[2];$('region2').disabled=!$('region1').value;$('region3').disabled=!$('region2').value;}
 
 const plain=v=>VaultModel.normalizeSearch(v);
-function advancedActive(){return [1,2,3].some(n=>$('level'+n).value||$('region'+n).value)||['person','eic','pic',...TEXT_FILTERS].some(k=>$(k).value.trim())||Object.values(filterState).some(v=>v.length);}
+function advancedActive(){return FILTER_INPUTS.some(k=>$(k).value.trim())||Object.values(filterState).some(v=>v.length);}
 function people(){return Object.fromEntries(['person','eic','pic'].map(key=>[key,$(key).value.trim()]));}
 // 列表文字搜索同时覆盖原列表字段（甲乙方、来源文件、上传者ID）与检索字段（关键词、Tag、行业等）。
 // 多个关键词：用空格、逗号、分号或顿号分隔；「全部包含」需每个词都命中，「包含任一」命中一个即可。
@@ -52,7 +48,7 @@ const matchAny=()=>$('matchMode').value==='any';
 function matchTerm(p,q){
  const m=VaultModel.matchContract(p,q,businessLinks);if(m.kind!=='none')return m;
  const o=originals.find(c=>c.id===p.id)||{};
- return [o.partyA,o.partyB,o.sourceFile,o.signDate,o.uploadedByName,o.uploadedByUsername].some(v=>v&&plain(v).includes(plain(q)))?{kind:'direct',reasons:[]}:m;
+ return [o.partyA,o.partyB,o.sourceFile,o.signDate,o.uploadedByName,o.engagementCode,o.engagementCodeDescription,o.engagementName].some(v=>v&&plain(v).includes(plain(q)))?{kind:'direct',reasons:[]}:m;
 }
 function matchLocal(p,q){
  const terms=splitTerms(q);if(terms.length<=1)return matchTerm(p,terms[0]||q);
@@ -61,9 +57,10 @@ function matchLocal(p,q){
  return {kind:hit.some(r=>r.kind==='direct')&&(matchAny()||hit.every(r=>r.kind==='direct'))?'direct':'related',reasons:[...new Set(hit.flatMap(r=>r.reasons||[]))]};
 }
 function filterLocal(query){
- const levels=[1,2,3].map(n=>$('level'+n).value),regions=[1,2,3].map(n=>$('region'+n).value),who=people(),matches=new Map();
+ const who=people(),matches=new Map(),engagement=Object.fromEntries(Object.keys(ENGAGEMENT_FILTERS).map(k=>[k,$(k).value.trim().toLowerCase()]));
  for(const c of contracts){
-  if(!levels.every((v,i)=>!v||c.industry[i]===v)||!regions.every((v,i)=>!v||c.region[i]===v))continue;
+  const o=originals.find(x=>x.id===c.id)||{};
+  if(Object.entries(ENGAGEMENT_FILTERS).some(([k,fields])=>engagement[k]&&!fields.some(f=>String(o[f]||'').toLowerCase().includes(engagement[k]))))continue;
   if(filterState.services.length&&!filterState.services.some(t=>VaultModel.matchesDimension(c.services,t,'services')))continue;
   if(filterState.specificTags.length&&!filterState.specificTags.some(t=>VaultModel.matchesDimension(c.specificTags,t,'specificTags')))continue;
   if(filterState.systems.length&&!filterState.systems.some(t=>VaultModel.matchesDimension(c.systems,t,'systems')))continue;
@@ -79,7 +76,7 @@ function filterLocal(query){
 // 检索结果：本机合同（我上传，可编辑）+ 云盘 Excel 总表里不在本机的合同（他人上传，只读），以卡片展示。
 // 本机部分即时过滤；云盘总表在输入后自动查询（防抖），条件变化即失效。
 let remote={key:null,rows:[],total:0,loading:false,error:''},requestId=0,timer=null,remoteTimer=null,shown=[];
-function criteriaKey(){return JSON.stringify({q:$('keyword').value.trim(),any:matchAny(),p:people(),f:filterState,v:[1,2,3].flatMap(n=>[$('level'+n).value,$('region'+n).value]),t:TEXT_FILTERS.map(k=>$(k).value)});}
+function criteriaKey(){return JSON.stringify({q:$('keyword').value.trim(),any:matchAny(),p:people(),f:filterState,t:FILTER_INPUTS.map(k=>$(k).value)});}
 function changed(){if(discarded)return;clearTimeout(timer);timer=setTimeout(render,120);clearTimeout(remoteTimer);if($('keyword').value.trim())remoteTimer=setTimeout(searchTeam,450);}
 async function searchTeam(){
  if(discarded)return;clearTimeout(remoteTimer);
@@ -139,11 +136,9 @@ function render(){
  else if(current)parts.push(`他人上传 ${others.length} 份${current.total>current.rows.length?`（共 ${current.total} 份，显示前 ${current.rows.length} 份）`:''}`);
  $('summary').innerHTML=parts.join(' · ');
 }
-function reset(){[1,2,3].forEach(n=>{$('level'+n).value='';$('region'+n).value='';});options($('level2'),[],'全部二级行业');options($('level3'),[],'全部三级行业');$('level2').disabled=$('level3').disabled=true;['keyword','person','eic','pic',...TEXT_FILTERS].forEach(id=>$(id).value='');for(const key of Object.keys(filterState)){filterState[key]=[];$('filter-'+key).value='';drawPicker(key);$('menu-'+key).hidden=true;$('filter-'+key).setAttribute('aria-expanded','false');}$('sort').value='default';refreshRegionFilters();remote={key:null,rows:[],total:0,loading:false,error:''};render();}
-$('region1').onchange=()=>{$('region2').value='';$('region3').value='';refreshRegionFilters();changed();};
-$('region2').onchange=()=>{$('region3').value='';refreshRegionFilters();changed();};
-$('region3').addEventListener('change',changed);$('level3').addEventListener('change',changed);$('matchMode').addEventListener('change',changed);$('sort').addEventListener('change',render);
-['keyword','person','eic','pic',...TEXT_FILTERS].forEach(id=>$(id).addEventListener('input',changed));
+function reset(){FILTER_INPUTS.concat('keyword').forEach(id=>$(id).value='');for(const key of Object.keys(filterState)){filterState[key]=[];$('filter-'+key).value='';drawPicker(key);$('menu-'+key).hidden=true;$('filter-'+key).setAttribute('aria-expanded','false');}$('sort').value='default';remote={key:null,rows:[],total:0,loading:false,error:''};render();}
+$('matchMode').addEventListener('change',changed);$('sort').addEventListener('change',render);
+['keyword',...FILTER_INPUTS].forEach(id=>$(id).addEventListener('input',changed));
 $('reset').onclick=reset;
 $('searchForm').onsubmit=e=>{e.preventDefault();for(const key of Object.keys(filterState))if($('filter-'+key).value.trim())addFilter(key,$('filter-'+key).value);render();searchTeam();};
 $('searchPage').querySelectorAll('[data-key]').forEach(b=>b.onclick=()=>{$('keyword').value=b.dataset.key;render();searchTeam();});
@@ -169,22 +164,20 @@ $('detail').addEventListener('click',e=>{if(e.target===$('detail')){const r=$('d
 // ===================== 编辑弹窗（原合同整理与标签管理） =====================
 // 使用独立草稿；只有成功保存才写回合同库。
 let draft=null,dirty=false,editingTag=null,draftRevision=null;
-const editorGroups={keywords:'关键词',systems:'系统',services:'服务领域',specificTags:'具体服务',customTags:'自定义 Tag'};
-const TEXT_FIELDS={editName:'name',editPartyA:'partyA',editPartyB:'partyB',editSignDate:'signDate',editScope:'scope',editNeed:'need',editOriginal:'originalDescription',editEic:'eic',editPic:'pic',editFic:'fic',editBusinessModel:'businessModel',editServiceTerm:'serviceTerm',editNotes:'notes',editAuditPurpose:'auditPurpose'};
+const editorGroups={keywords:'关键词',systems:'系统',services:'服务领域',specificTags:'具体服务'};
+const TEXT_FIELDS={editName:'name',editPartyA:'partyA',editEngagementCode:'engagementCode',editEngagementCodeDescription:'engagementCodeDescription',editEngagementName:'engagementName',editPartyB:'partyB',editSignDate:'signDate',editNeed:'need',editOriginal:'originalDescription',editEic:'eic',editPic:'pic',editFic:'fic',editServiceTerm:'serviceTerm',editNotes:'notes',editAuditPurpose:'auditPurpose'};
 const copy=x=>JSON.parse(JSON.stringify(x));
 function status(message,error=false){$('saveStatus').textContent=message;$('saveStatus').classList.toggle('error',error);}
 function markDirty(){if(!draft)return;dirty=true;$('draftState').textContent='● 有未保存修改';status('修改尚未保存。');}
-function populateEditorIndustry(){options($('editIndustry1'),Object.keys(industry),'请选择一级行业');$('editIndustry1').value=draft.industry[0];options($('editIndustry2'),Object.keys(industry[draft.industry[0]]||{}),'请选择二级行业');$('editIndustry2').value=draft.industry[1];options($('editIndustry3'),industry[draft.industry[0]]?.[draft.industry[1]]||[],'请选择三级行业');$('editIndustry3').value=draft.industry[2];}
 function loadDraft(id){
  const original=originals.find(c=>c.id===id),projected=contracts.find(c=>c.id===id);if(!original||!projected)return false;
- $('industryCustomPanel').hidden=true;[1,2,3].forEach(n=>$('industryCustom'+n).value='');
  draftRevision=original.ocrRevision;
- draft={...copy(projected),partyA:original.partyA||'',partyB:original.partyB||'',signDate:original.signDate||'',auditPurpose:original.auditPurpose||''};
+ draft={...copy(projected),partyA:original.partyA||'',partyB:original.partyB||'',signDate:original.signDate||'',auditPurpose:original.auditPurpose||'',engagementCode:original.engagementCode||'',engagementCodeDescription:original.engagementCodeDescription||'',engagementName:original.engagementName||''};
  dirty=false;editingTag=null;
  for(const [field,key] of Object.entries(TEXT_FIELDS))$(field).value=draft[key]??'';
  $('editAuditPurposeReviewed').checked=false;
  $('editDeliverables').value=draft.deliverables.join('\n');
- populateEditorIndustry();[1,2,3].forEach(n=>$('editRegion'+n).value=draft.region[n-1]);refreshEditorRegions();renderEditors();
+ renderEditors();
  $('editorTitle').textContent='编辑合同 · '+(draft.name||'未命名合同');
  $('draftState').textContent=ContractScope.resolve(draft).label+' · '+draft.id;
  status('修改仅在保存后写入合同库，可合并到云盘总表。');
@@ -211,16 +204,10 @@ $('editorForm').addEventListener('click',e=>{const b=e.target.closest('[data-act
 $('editorForm').addEventListener('keydown',e=>{if(e.isComposing)return;if(e.key==='Enter'&&e.target.matches('.tag-add input,.edit-inline input')){e.preventDefault();const b=e.target.parentElement.querySelector('[data-action]');changeTag(b.dataset.action,b.dataset.group,Number(b.dataset.index));}});
 $('editorForm').addEventListener('input',e=>{if(!e.target.closest('.tag-add,.edit-inline'))markDirty();});
 $('editorForm').addEventListener('change',e=>{if(!e.target.closest('.tag-add,.edit-inline'))markDirty();});
-$('editIndustry1').onchange=()=>{options($('editIndustry2'),Object.keys(industry[$('editIndustry1').value]||{}),'请选择二级行业');options($('editIndustry3'),[],'请选择三级行业');markDirty();};
-$('editIndustry2').onchange=()=>{options($('editIndustry3'),industry[$('editIndustry1').value]?.[$('editIndustry2').value]||[],'请选择三级行业');markDirty();};
 function pendingInput(){if(!draft)return false;return !!editingTag||Object.keys(editorGroups).some(key=>$('add-'+key)?.value.trim());}
 $('discardDraft').onclick=()=>{if(!draft)return;if((dirty||pendingInput())&&!confirm('撤销当前合同所有未保存修改？'))return;loadDraft(draft.id);};
 $('extractKeywords').onclick=()=>{if(!draft)return;const text=ContractScope.category(draft)==='ey-template'?ContractScope.textFor(draft):draft.rawText||$('editOriginal').value.trim();if(!text){status(ContractScope.category(draft)==='ey-template'?'未定位附录一／工作说明书，请先核对识别全文。':'请先识别合同。',true);return;}const analyzed=draft.analysis||ServiceContent.analyze(text);const custom=draft.keywordsSelectionManual?draft.keywords.filter(k=>!analyzed.keywords.some(x=>x.label===k)):[];draft.keywords=[...new Set([...analyzed.keywords.map(x=>x.label),...custom])];editingTag=null;markDirty();renderEditors();status('已根据'+ContractScope.resolve(draft).label+'提取关键词，自定义关键词保留。');};
 $('generateTags').onclick=()=>{if(!draft)return;const analyzed=draft.analysis||ServiceContent.analyze(ContractScope.category(draft)==='ey-template'?ContractScope.textFor(draft):draft.rawText||$('editOriginal').value);draft.services=[...new Set(analyzed.serviceDomains.map(x=>x.label))];draft.specificTags=[...new Set(analyzed.services.map(x=>x.label))];draft.domainSelectionManual=false;draft.specificSelectionManual=false;editingTag=null;markDirty();renderEditors();status(ContractScope.category(draft)==='ey-template'&&!ContractScope.textFor(draft)?'未定位附录一／工作说明书，未生成自动Tag；自定义标签和笔记保留。':'已根据'+ContractScope.resolve(draft).label+'重新分类，保存后生效。');};
-function refreshEditorRegions(){const tree=allRegionData(),r=$('editRegion1').value,p=$('editRegion2').value;[Object.keys(tree),Object.keys(tree[r]||{}),tree[r]?.[p]||[]].forEach((items,i)=>$('regionOptions'+(i+1)).innerHTML=items.map(v=>`<option value="${esc(v)}"></option>`).join(''));}
-$('editRegion1').oninput=()=>{$('editRegion2').value='';$('editRegion3').value='';refreshEditorRegions();markDirty();};$('editRegion2').oninput=()=>{$('editRegion3').value='';refreshEditorRegions();markDirty();};
-$('customIndustry').onclick=()=>{$('industryCustomPanel').hidden=!$('industryCustomPanel').hidden;};
-$('applyIndustry').onclick=()=>{const path=[1,2,3].map(i=>$('industryCustom'+i).value.trim());if(!path[0]||path.some((v,i)=>v&&path.slice(0,i).some(x=>!x))){status('请按顺序填写行业分类。',true);return;}extendIndustry(path);draft.industry=path;populateEditorIndustry();$('industryCustomPanel').hidden=true;markDirty();};
 function setBusy(on){$('editorForm').querySelectorAll('input,select,textarea,button').forEach(el=>el.disabled=on);}
 $('editorForm').onsubmit=async e=>{
  e.preventDefault();if(!draft||saving)return;
@@ -228,11 +215,8 @@ $('editorForm').onsubmit=async e=>{
  const next=copy(draft);
  for(const [field,key] of Object.entries(TEXT_FIELDS))next[key]=$(field).value.trim();
  delete next.amount;delete next.enterpriseSize;
- next.industry=[1,2,3].map(n=>$('editIndustry'+n).value);
- next.region=[1,2,3].map(n=>$('editRegion'+n).value.trim());
  next.deliverables=$('editDeliverables').value.split(/\n/).map(x=>x.trim()).filter(Boolean);
  if(!next.name){status('请填写合同名称。',true);$('editName').focus();return;}
- if(!validSaved(next)){status('请按顺序填写行业与区域层级。',true);return;}
  saving=true;setBusy(true);
  try{
   const all=await Storage.getAllContracts(),latest=all.find(c=>c.id===next.id);
@@ -272,13 +256,12 @@ $('editorDialog').addEventListener('cancel',e=>{e.preventDefault();closeEditor()
 // ===================== 领域库 =====================
 function renderDomainCatalog(){const rows=DomainCatalog.list();$('domainList').innerHTML=rows.map(x=>`<div class="domain-entry"><strong>${esc(x.name)}</strong><span>${x.contractIds.length} 份合同${x.aliases.length?' · 别名：'+x.aliases.map(esc).join('、'):''}</span></div>`).join('');}
 $('saveDomain').onclick=async()=>{const button=$('saveDomain');button.disabled=true;try{await DomainCatalog.define($('domainName').value.trim(),$('domainAliases').value.split(/[、,，;；]/).map(x=>x.trim()).filter(Boolean));$('domainStatus').textContent='已保存，今后合同会使用此领域及别名匹配';$('domainName').value='';$('domainAliases').value='';await hooks.saved();updateSystemOptions();changed();}catch(error){$('domainStatus').textContent='保存失败：'+error.message;}finally{button.disabled=false;}};
-function updateSystemOptions(){renderDomainCatalog();Object.keys(filterState).forEach(drawPicker);$('serviceTagOptions').innerHTML=pickerOptions('services').map(s=>`<option value="${esc(s)}"></option>`).join('');refreshRegionFilters();}
+function updateSystemOptions(){renderDomainCatalog();Object.keys(filterState).forEach(drawPicker);$('serviceTagOptions').innerHTML=pickerOptions('services').map(s=>`<option value="${esc(s)}"></option>`).join('');}
 
 function project(c){const p=VaultModel.project(c);p.industry=[0,1,2].map(i=>p.industry[i]||'');p.region=[0,1,2].map(i=>p.region[i]||'');p.content=c.content||p.scope;return p;}
 function sync(data){
  if(discarded)return;
  originals=data;contracts=data.map(project);contracts.forEach(c=>extendIndustry(c.industry));
- const current=$('level1').value;options($('level1'),Object.keys(industry),'全部一级行业');$('level1').value=current;
  updateSystemOptions();render();
  if(draft&&!originals.some(c=>c.id===draft.id)){closeEditor(true);hooks.toast('正在编辑的合同已被删除','warning');}
 }

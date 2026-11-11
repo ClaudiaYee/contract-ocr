@@ -23,10 +23,10 @@ const [dl]=await Promise.all([p.waitForEvent('download'),p.locator('#exportExcel
 const parsed=JSON.parse(pyRun('h,r=e.read_xlsx(open('+JSON.stringify(xfile)+',"rb").read());sys.stdout.buffer.write(json.dumps({"h":h,"r":r}).encode())'));console.log(parsed);
 assert.equal(parsed.r[0]['合同ID'],'a1');assert(parsed.h.includes('上传者ID'));assert.equal(parsed.r[0]['上传者ID'],me,'上传者ID is filled by the local service');
 // modify: FIC on a1, keywords, plus a new row
-pyRun('h,r=e.read_xlsx(open('+JSON.stringify(xfile)+',"rb").read());r[0]["FIC"]="\\u94b1\\u4e03";r[0]["\\u4e59\\u65b9"]="";r.append({"\\u9879\\u76ee\\u540d\\u79f0":"\\u65b0\\u5bfc\\u5165\\u9879\\u76ee","\\u7532\\u65b9":"\\u7532\\u516c\\u53f8","\\u7b7e\\u7ea6\\u65f6\\u95f4":"2026-01-02","\\u539f\\u59cb\\u5173\\u952e\\u8bcd":"ITGC\\uff1b\\u6e17\\u900f\\u6d4b\\u8bd5","PIC":"\\u5b59\\u516b"});open('+JSON.stringify(ifile)+',"wb").write(e.write_xlsx(e.COLUMNS,r))');
+pyRun('h,r=e.read_xlsx(open('+JSON.stringify(xfile)+',"rb").read());r[0]["FIC"]="\\u94b1\\u4e03";r[0]["Engagement Code"]="E-0001";r[0]["Engagement Name"]="Guangzhou engagement";r[0]["\\u4e59\\u65b9"]="";r.append({"\\u9879\\u76ee\\u540d\\u79f0":"\\u65b0\\u5bfc\\u5165\\u9879\\u76ee","\\u7532\\u65b9":"\\u7532\\u516c\\u53f8","\\u7b7e\\u7ea6\\u65f6\\u95f4":"2026-01-02","\\u539f\\u59cb\\u5173\\u952e\\u8bcd":"ITGC\\uff1b\\u6e17\\u900f\\u6d4b\\u8bd5","PIC":"\\u5b59\\u516b"});open('+JSON.stringify(ifile)+',"wb").write(e.write_xlsx(e.COLUMNS,r))');
 await p.locator('#importExcelFile').setInputFiles(ifile);await toast(p,'新增 1 份，更新 1 份');
 await p.waitForFunction(()=>document.querySelectorAll('#contractTableBody tr[data-id]').length===2);
-const a1=(await p.locator('tr[data-id="a1"] td').allTextContents()).map(x=>x.trim());console.log('a1 after',a1);assert(a1.includes('钱七'));assert(a1.includes('安永华明会计师事务所'),'blank cell must not erase');
+const a1=(await p.locator('tr[data-id="a1"] td').allTextContents()).map(x=>x.trim());console.log('a1 after',a1);assert(a1.includes('钱七'));const a1Saved=await p.evaluate(async()=>(await Storage.getAllContracts()).find(c=>c.id==='a1'));assert.equal(a1Saved.engagementCode,'E-0001');assert.equal(a1Saved.engagementName,'Guangzhou engagement');assert(a1.includes('安永华明会计师事务所'),'blank cell must not erase');
 const newRow=p.locator('#contractTableBody tr[data-id]').filter({hasText:'新导入项目'});const nr=(await newRow.locator('td').allTextContents()).map(x=>x.trim().replace(/\s+/g,' '));console.log('new',nr);assert(nr.includes('孙八'));assert(nr.join(' ').includes('ITGC'));
 // reimport same file: no changes
 await p.locator('#importExcelFile').setInputFiles(ifile);await toast(p,'无变化 2');
@@ -41,12 +41,12 @@ const master=path.join(cloud,'合同识别总表.xlsx');
 pyRun('h,r=e.read_xlsx(open('+JSON.stringify(master)+',"rb").read());h.append("\\u5907\\u6ce8");r[0]["\\u5907\\u6ce8"]="\\u624b\\u586b";r.append({"\\u9879\\u76ee\\u540d\\u79f0":"other","\\u7532\\u65b9":"X"});open('+JSON.stringify(master)+',"wb").write(e.write_xlsx(h,r))');
 await p.locator('#cloudMergeBtn').click();await cloudUpload();await toast(p,'更新 2 行');
 const m=JSON.parse(pyRun('h,r=e.read_xlsx(open('+JSON.stringify(master)+',"rb").read());sys.stdout.buffer.write(json.dumps({"h":h,"r":r}).encode())'));console.log(m.h,m.r.map(r=>[r['项目名称'],r['FIC'],r['备注']]));
-assert.equal(m.r.length,3);assert(m.r.filter(r=>r['合同ID']).every(r=>r['上传者ID']===me));assert(m.h.includes('备注'));assert(m.r.some(r=>r['备注']==='手填'));assert(fs.readdirSync(cloud).some(f=>f.includes('备份')));
+assert.equal(m.r.length,3);assert(m.r.filter(r=>r['合同ID']).every(r=>r['上传者ID']===me));assert.equal(m.r.find(r=>r['合同ID']==='a1')['Engagement Code'],'E-0001');assert(m.h.indexOf('Engagement Code')===2&&m.h.indexOf('Engagement Name')===4);assert(m.h.includes('备注'));assert(m.r.some(r=>r['备注']==='手填'));assert(fs.readdirSync(cloud).some(f=>f.includes('备份')));
 // 合同检索：本机合同 + 云盘总表中不在本机的合同（他人上传，只读），表格与我的合同相同，并跟随保存的路径变化。
 await p.locator('[data-view="vault-search"]').click();
 assert(!(await p.locator('#demo-searchResults').isVisible()));
 await p.locator('#demo-searchPage .search-advanced > summary').click();
-assert(await p.locator('#demo-level1').isVisible());
+assert(await p.locator('#demo-engagementCode').isVisible());
 assert(await p.locator('#demo-filter-specificTags').isVisible());
 await p.locator('#demo-person').fill('钱七');
 await p.locator('#demo-resultBody tr[data-id="a1"]').waitFor();
@@ -60,7 +60,7 @@ await cloudCard.waitFor();
 assert((await cloudCard.innerText()).includes('只读'));assert.equal(await cloudCard.locator('[data-edit]').count(),0);assert.equal(await cloudCard.locator('[data-delete]').count(),0);
 await cloudCard.locator('[data-row]').click();
 assert.deepEqual(await p.locator('#demo-vaultDetailBody .facts span').allTextContents(),
- ['上传者ID','甲方','乙方','签约时间','原始关键词','PIC','EIC','FIC','来源文件','合同ID']);
+ ['上传者ID','Engagement Code','Engagement Code Description','Engagement Name','甲方','乙方','签约时间','原始关键词','PIC','EIC','FIC','来源文件','合同ID']);
 await p.locator('#demo-close').click();
 await p.locator('#demo-keyword').fill('手填');
 await p.waitForFunction(()=>document.querySelector('#demo-resultBody .empty-row')&&!document.getElementById('demo-summary').textContent.includes('正在'));

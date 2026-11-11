@@ -551,7 +551,7 @@ const App = (() => {
   function listFiltered(){
     const filter=(document.getElementById('searchInput')?.value||'').trim().toLowerCase();
     if(!filter)return contracts;
-    return contracts.filter(c=>{const p=listProfile(c);return [c.projectName,c.partyA,c.partyB,c.content,c.deliverables,c.sourceFile,c.rawText,c.uploadedByName,...(p.keywords||[]),...(p.systems||[]),p.pic,p.eic,p.fic].filter(Boolean).join(' ').toLowerCase().includes(filter);});
+    return contracts.filter(c=>{const p=listProfile(c);return [c.projectName,c.partyA,c.partyB,c.content,c.deliverables,c.sourceFile,c.rawText,c.uploadedByName,c.engagementCode,c.engagementCodeDescription,c.engagementName,...(p.keywords||[]),...(p.systems||[]),p.pic,p.eic,p.fic].filter(Boolean).join(' ').toLowerCase().includes(filter);});
   }
   function listColumns(c){
     const p=listProfile(c),keywords=p.keywords||[],shown=keywords.slice(0,6);
@@ -559,7 +559,7 @@ const App = (() => {
     return `<td class="kw-cell" title="${escapeHtml(keywords.join('；'))}"><div class="list-kws">${chips}</div></td>`+['pic','eic','fic'].map(k=>`<td class="person-cell">${escapeHtml(p[k]||'-')}</td>`).join('');
   }
   function excelRows(list){
-    return list.map(c=>{const p=listProfile(c);return {'项目名称':c.projectName||'','上传者ID':c.uploadedByName||myUploader(),'甲方':c.partyA||'','乙方':c.partyB||'','签约时间':c.signDate||'','原始关键词':(p.keywords||[]).join('；'),'PIC':p.pic||'','EIC':p.eic||'','FIC':p.fic||'','来源文件':c.sourceFile||'','合同ID':c.id};});
+    return list.map(c=>{const p=listProfile(c);return {'项目名称':c.projectName||'','上传者ID':c.uploadedByName||myUploader(),'Engagement Code':c.engagementCode||'','Engagement Code Description':c.engagementCodeDescription||'','Engagement Name':c.engagementName||'','甲方':c.partyA||'','乙方':c.partyB||'','签约时间':c.signDate||'','原始关键词':(p.keywords||[]).join('；'),'PIC':p.pic||'','EIC':p.eic||'','FIC':p.fic||'','来源文件':c.sourceFile||'','合同ID':c.id};});
   }
   function needDesktop(){if(NativeDocuments.available())return false;showToast('Excel 导出、导入和云盘合并需要在桌面版（ContractOCR.exe）中使用','warning');return true;}
   async function excelPost(path,body,json=true){
@@ -584,6 +584,7 @@ const App = (() => {
   const splitKeywords=text=>[...new Set(String(text||'').split(/[；;，,、\n]+/).map(x=>x.trim()).filter(Boolean))];
   const sameKey=(c,row)=>[c.projectName,c.partyA,c.signDate].map(x=>String(x||'').trim().toLowerCase()).join('|')===[row['项目名称'],row['甲方'],row['签约时间']].map(x=>String(x||'').trim().toLowerCase()).join('|');
   // 导入同格式表：按合同ID（没有ID时按项目名称+甲方+签约时间）更新已有合同；表里留空的单元格不覆盖已有内容；找不到的行新增为「表格导入」合同。
+  const ENGAGEMENT_COLUMNS=[['Engagement Code','engagementCode'],['Engagement Code Description','engagementCodeDescription'],['Engagement Name','engagementName']];
   async function importExcel(file){
     const {rows}=await (await excelPost('/api/excel/parse',file,false)).json();
     let added=0,updated=0,unchanged=0;
@@ -597,10 +598,11 @@ const App = (() => {
         if(keywords.length&&keywords.join('；')!==(p.keywords||[]).join('；')){next.keywords=keywords;next.keywordsSelectionManual=true;changed=true;}
         let record=changed?VaultModel.update(current,next):{...current};
         for(const [column,key] of [['甲方','partyA'],['乙方','partyB'],['签约时间','signDate']])if(row[column]&&row[column]!==(current[key]||'')){record[key]=row[column];record.manualFieldsEditedAt=new Date().toISOString();changed=true;}
+        for(const [column,key] of ENGAGEMENT_COLUMNS)if(row[column]&&row[column]!==(current[key]||'')){record[key]=row[column];changed=true;}
         if(changed){await Storage.updateContract(record);updated++;}else unchanged++;
       }else{
         const keywords=splitKeywords(row['原始关键词']);
-        await Storage.addContract({id:row['合同ID']||Storage.generateId(),projectName:row['项目名称']||'',partyA:row['甲方']||'',partyB:row['乙方']||'',signDate:row['签约时间']||'',amount:null,content:'',deliverables:'',sourceFile:row['来源文件']||'',rawText:'',uploadCategory:'other',importedFromExcel:true,manualFieldsEditedAt:new Date().toISOString(),createdAt:Date.now(),
+        await Storage.addContract({id:row['合同ID']||Storage.generateId(),projectName:row['项目名称']||'',partyA:row['甲方']||'',partyB:row['乙方']||'',signDate:row['签约时间']||'',...Object.fromEntries(ENGAGEMENT_COLUMNS.map(([column,key])=>[key,row[column]||''])),amount:null,content:'',deliverables:'',sourceFile:row['来源文件']||'',rawText:'',uploadCategory:'other',importedFromExcel:true,manualFieldsEditedAt:new Date().toISOString(),createdAt:Date.now(),
           knowledgeProfile:{name:row['项目名称']||'',pic:row['PIC']||'',eic:row['EIC']||'',fic:row['FIC']||'',keywords,keywordsSelectionManual:true,tagSchemaVersion:3}});
         added++;
       }

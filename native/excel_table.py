@@ -17,12 +17,12 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 from xml.sax.saxutils import escape
 
-COLUMNS = ['项目名称', '上传者ID', '甲方', '乙方', '签约时间', '原始关键词', 'PIC', 'EIC', 'FIC', '来源文件', '合同ID']
+COLUMNS = ['项目名称', '上传者ID', 'Engagement Code', 'Engagement Code Description', 'Engagement Name', '甲方', '乙方', '签约时间', '原始关键词', 'PIC', 'EIC', 'FIC', '来源文件', '合同ID']
 ID_COLUMN = '合同ID'
 SYNC_COLUMN = '同步时间'
 SHEET_NAME = '合同列表'
 MASTER_NAME = '合同识别总表.xlsx'
-WIDTHS = {'项目名称': 42, '上传者ID': 18, '甲方': 28, '乙方': 28, '签约时间': 13, '原始关键词': 48, 'PIC': 12, 'EIC': 12, 'FIC': 12, '来源文件': 30, '合同ID': 30, '同步时间': 20}
+WIDTHS = {'项目名称': 42, '上传者ID': 18, 'Engagement Code': 18, 'Engagement Code Description': 36, 'Engagement Name': 32, '甲方': 28, '乙方': 28, '签约时间': 13, '原始关键词': 48, 'PIC': 12, 'EIC': 12, 'FIC': 12, '来源文件': 30, '合同ID': 30, '同步时间': 20}
 NS = {'m': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
 REL_NS = '{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id'
 _ILLEGAL = re.compile('[\x00-\x08\x0b\x0c\x0e-\x1f]')

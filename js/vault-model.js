@@ -69,7 +69,7 @@ const VaultModel=(()=>{
   return{direct,related};
  }
  function recordChanges(before,after){
-  const fields=['projectName','partyA','partyB','signDate','amount','content','deliverables','auditPurpose','knowledgeProfile'];
+  const fields=['projectName','partyA','partyB','signDate','amount','content','deliverables','auditPurpose','engagementCode','engagementCodeDescription','engagementName','knowledgeProfile'];
   const changes=fields.filter(k=>JSON.stringify(before[k])!==JSON.stringify(after[k])).map(field=>({field,before:before[field]??null,after:after[field]??null}));
   if(!changes.length)return after;
   return {...after,manualEditHistory:[...(before.manualEditHistory||[]),{at:new Date().toISOString(),changes}]};
@@ -88,7 +88,7 @@ const VaultModel=(()=>{
   const profile={...p,tagSchemaVersion:3,tagSourceFingerprint:project(c).tagSourceFingerprint};
   if(c.knowledgeProfile&&c.knowledgeProfile.tagSchemaVersion!==3)profile.previousTagClassification={version:c.knowledgeProfile.tagSchemaVersion||1,previous:c.knowledgeProfile.previousTagClassification||null,services:c.knowledgeProfile.services||[],specificTags:c.knowledgeProfile.specificTags||[],keywords:c.knowledgeProfile.keywords||[]};delete profile.id;delete profile.rawText;delete profile.analysis;delete profile.factEvidence;delete profile.analysisScope;
   // 编辑弹窗不再显示金额：未提供 amount 时保留原值。甲乙方、签约时间、服务目的随同一次保存写回原字段。
-  const identity={};for(const key of ['partyA','partyB','signDate','auditPurpose'])if(typeof p[key]==='string'){identity[key]=p[key];delete profile[key];}
+  const identity={};for(const key of ['partyA','partyB','signDate','auditPurpose','engagementCode','engagementCodeDescription','engagementName'])if(typeof p[key]==='string'){identity[key]=p[key];delete profile[key];}
   if(identity.auditPurpose!==undefined&&identity.auditPurpose!==(c.auditPurpose||'')){identity.auditPurposeNeedsReview=false;identity.auditPurposeEditedAt=Date.now();}
   const amount=p.amount===undefined?c.amount:p.amount===''?null:Math.round(Number(p.amount)*1000000)/100;if(p.amount===undefined)delete profile.amount;
   const prior=project(c);return synchronizeEdit(c,{...c,...identity,projectName:p.name,amount,content:p.scope!==prior.scope?p.scope:c.content,deliverables:JSON.stringify(p.deliverables)!==JSON.stringify(prior.deliverables)?(p.deliverables||[]).join('；'):c.deliverables,knowledgeProfile:profile,manualFieldsEditedAt:new Date().toISOString()});
