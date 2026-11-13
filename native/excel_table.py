@@ -13,6 +13,11 @@ import shutil
 import tempfile
 import unicodedata
 import zipfile
+
+try:
+    from . import fulltext_index  # type: ignore
+except ImportError:
+    import fulltext_index
 from pathlib import Path
 from xml.etree import ElementTree as ET
 from xml.sax.saxutils import escape
@@ -246,8 +251,8 @@ def search_master(configured: str, query: str, people: dict, eligible_ids: set |
         # 与本地检索一致：忽略空格、下划线、连字符和斜杠，「SOC2」也能命中「SOC 2」
         return re.sub(r'[\s_\-/]+', '', unicodedata.normalize('NFKC', str(text or '')).casefold())
 
-    terms = [normalize(term) for term in search_terms(query)]
-    terms = [term for term in terms if term]
+    raw_terms = [term for term in search_terms(query) if normalize(term)]
+    terms = [normalize(term) for term in raw_terms]
     combine = any if match_any else all
     if not terms and not any(people.values()) and eligible_ids is None:
         return {'rows': [], 'total': 0}
@@ -273,11 +278,21 @@ def search_master(configured: str, query: str, people: dict, eligible_ids: set |
         if person and not any(person in normalize(public_row[role]) for role in ('PIC', 'EIC', '上传者ID')):
             continue
         fields = [normalize(value) for value in public_row.values()]
-        direct = identifier in direct_ids or (bool(terms) and combine(any(term in field for field in fields) for term in terms))
+        in_fields = [any(term in field for field in fields) for term in terms]
+        text_terms = []
+        # 表格列里没有的词，再查该合同的加密全文检索索引（合并时由上传者电脑生成）
+        if terms and identifier and not all(in_fields):
+            index = fulltext_index.load(path, identifier)
+            if index is not None:
+                for i, term in enumerate(terms):
+                    if not in_fields[i] and fulltext_index.contains(index, raw_terms[i]):
+                        in_fields[i] = True
+                        text_terms.append(raw_terms[i])
+        direct = identifier in direct_ids or (bool(terms) and combine(in_fields))
         if direct or identifier in related_ids:
             total += 1
             if len(matches) < 500:
-                matches.append({'row': public_row, 'kind': 'direct' if direct else 'related'})
+                matches.append({'row': public_row, 'kind': 'direct' if direct else 'related', 'textTerms': text_terms if direct else []})
     return {'rows': matches, 'total': total}
 
 
