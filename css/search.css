@@ -112,3 +112,4 @@
 .my-contracts.dragover{outline:2px dashed #2563eb;outline-offset:6px;border-radius:12px;background:#eff6ff}
 .my-contracts.dragover .upload-drop-hint{display:block;text-align:center;padding:18px;color:#2563eb;font-weight:600}
 .parse-progress .progress-side{display:flex;align-items:center;gap:12px}
+.result-filters input[type=search]{width:230px;padding:5px 8px;border:1px solid #dcdce3;border-radius:6px;background:#fff;font-size:12px}

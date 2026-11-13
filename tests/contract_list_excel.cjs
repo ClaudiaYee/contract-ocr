@@ -54,6 +54,10 @@ await p.locator('#demo-close').click();
 await p.locator('#demo-rfUploader').selectOption('GV371QP');await p.waitForFunction(()=>document.querySelectorAll('#demo-resultBody tr[data-index]').length===1&&document.querySelector('#demo-resultBody tr.row-remote'));
 await p.locator('#demo-rfUploader').selectOption('');await p.locator('#demo-rfPic').selectOption('赵六');await p.waitForFunction(()=>document.querySelectorAll('#demo-resultBody tr[data-index]').length===1&&document.querySelector('#demo-resultBody tr[data-id="a1"]'));
 await p.locator('#demo-rfPic').selectOption('');await p.waitForFunction(()=>document.querySelectorAll('#demo-resultBody tr[data-index]').length===2);
+// 签约时间搜索框：年月前缀、范围
+await p.locator('#demo-rfDate').fill('2026年10月');await p.waitForFunction(()=>document.querySelectorAll('#demo-resultBody tr[data-index]').length===1&&document.querySelector('#demo-resultBody tr[data-id="a1"]'));
+await p.locator('#demo-rfDate').fill('2025-01~2025-12');await p.waitForFunction(()=>document.querySelector('#demo-resultBody .empty-row'));
+await p.locator('#demo-rfDate').fill('');await p.waitForFunction(()=>document.querySelectorAll('#demo-resultBody tr[data-index]').length===2);
 await remoteRow.locator('[data-select]').check();assert((await p.locator('#demo-selectedCount').innerText()).includes('已勾选 1'));
 const exportFile=async name=>{const [dl]=await Promise.all([p.waitForEvent('download'),p.locator('#demo-exportResults').click()]);const file=path.join(work,name);await dl.saveAs(file);return readMaster(file);};
 let x=await exportFile('picked.xlsx');assert.equal(x.r.length,1);assert.equal(x.r[0]['合同ID'],'remote-gv');assert.equal(x.r[0]['上传者ID'],'GV371QP','others keep their uploader id');assert(!x.h.includes('来源文件')&&!x.h.includes('Engagement Code')&&!x.h.includes('FIC'));
