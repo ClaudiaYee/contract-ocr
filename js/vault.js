@@ -107,6 +107,15 @@ function itemPeople(item){
  if(item.type==='local'){const o=originals.find(x=>x.id===item.contract.id)||{};return {pic:item.contract.pic||'',eic:item.contract.eic||'',uploader:o.uploadedByName||hooks.uploader?.()||''};}
  return {pic:item.row['PIC']||'',eic:item.row['EIC']||'',uploader:item.row['上传者ID']||''};
 }
+// 签约时间筛选：年份 / 年月 / 日期前缀匹配，「~」「～」「至」表示范围（含两端）；2025.09.11、2025/9/11、2025年9月11日、20250911 均可。
+function normDate(v){return String(v||'').trim().replace(/^(\d{4})(\d{2})(\d{2})?$/,(m,y,mo,d)=>y+'-'+mo+(d?'-'+d:'')).replace(/[年月/.]/g,'-').replace(/日/g,'').replace(/-+$/,'').replace(/-(\d)(?=-|$)/g,'-0$1');}
+function itemDate(item){return normDate(item.type==='local'?(originals.find(x=>x.id===item.contract.id)||{}).signDate:item.row['签约时间']);}
+function dateMatches(date,query){
+ const q=String(query||'').trim();if(!q)return true;if(!date)return false;
+ const range=q.split(/\s*(?:~|～|至|到)\s*/);
+ if(range.length===2){const from=normDate(range[0]),to=normDate(range[1]);return (!from||date.slice(0,from.length)>=from)&&(!to||date.slice(0,to.length)<=to);}
+ return date.startsWith(normDate(q));
+}
 function checkCell(item){const key=itemKey(item);return `<td class="check-col"><input type="checkbox" data-select="${esc(key)}" ${selected.has(key)?'checked':''} aria-label="勾选导出"></td>`;}
 function resultRow(item,index){
  const related=item.kind==='related'?`<span class="match-kind" title="${esc((item.reasons||[]).join('；'))}">相关</span>`:'';
@@ -134,7 +143,7 @@ function render(){
   if(value&&!options.includes(value))options.unshift(value);
   el.innerHTML='<option value="">全部</option>'+options.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');el.value=value;
  }
- shown=all.filter(x=>{const who=itemPeople(x);return Object.entries(resultFilters).every(([field,id])=>!$(id).value||who[field]===$(id).value);});
+ shown=all.filter(x=>{const who=itemPeople(x);return Object.entries(resultFilters).every(([field,id])=>!$(id).value||who[field]===$(id).value)&&dateMatches(itemDate(x),$('rfDate').value);});
  const sort=$('sort').value,rank=x=>x.kind==='related'?1:0;
  shown.sort((a,b)=>sort==='default'?rank(a)-rank(b):(!a.date||!b.date)?Number(!a.date)-Number(!b.date):a.date.localeCompare(b.date)*(sort==='asc'?1:-1));
  $('count').textContent=`${shown.length} 条结果`;
@@ -154,6 +163,7 @@ function updateSelection(){
  $('exportResults').disabled=!shown.length;
 }
 for(const id of Object.values(resultFilters))$(id).addEventListener('change',render);
+let dateTimer=null;$('rfDate').addEventListener('input',()=>{clearTimeout(dateTimer);dateTimer=setTimeout(render,200);});
 $('resultBody').addEventListener('change',e=>{const box=e.target.closest('[data-select]');if(!box)return;if(box.checked)selected.add(box.dataset.select);else selected.delete(box.dataset.select);updateSelection();});
 $('selectAll').addEventListener('change',e=>{for(const item of shown){if(e.target.checked)selected.add(itemKey(item));else selected.delete(itemKey(item));}render();});
 $('exportResults').onclick=async()=>{
@@ -161,7 +171,7 @@ $('exportResults').onclick=async()=>{
  const button=$('exportResults');button.disabled=true;
  try{await hooks.exportResults(items.map(x=>x.type==='local'?{type:'local',id:x.contract.id}:{type:'remote',row:x.row}));}finally{button.disabled=false;}
 };
-function reset(){FILTER_INPUTS.concat('keyword').forEach(id=>$(id).value='');Object.values(resultFilters).forEach(id=>$(id).value='');for(const key of Object.keys(filterState)){filterState[key]=[];$('filter-'+key).value='';drawPicker(key);$('menu-'+key).hidden=true;$('filter-'+key).setAttribute('aria-expanded','false');}$('sort').value='default';remote={key:null,rows:[],total:0,loading:false,error:''};render();}
+function reset(){FILTER_INPUTS.concat('keyword').forEach(id=>$(id).value='');Object.values(resultFilters).forEach(id=>$(id).value='');$('rfDate').value='';for(const key of Object.keys(filterState)){filterState[key]=[];$('filter-'+key).value='';drawPicker(key);$('menu-'+key).hidden=true;$('filter-'+key).setAttribute('aria-expanded','false');}$('sort').value='default';remote={key:null,rows:[],total:0,loading:false,error:''};render();}
 $('matchMode').addEventListener('change',changed);$('sort').addEventListener('change',render);
 ['keyword',...FILTER_INPUTS].forEach(id=>$(id).addEventListener('input',changed));
 $('reset').onclick=reset;
