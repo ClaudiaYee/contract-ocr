@@ -738,7 +738,8 @@ const App = (() => {
   function renderServiceProfile(contract){
     if(AnalysisResults.managed(contract)&&!AnalysisResults.ready(contract))return '';
     const content=AnalysisResults.get(contract,'content',()=>ServiceContent.analyze(ContractScope.textFor(contract)));
-    const labels=key=>[...new Set(content[key].map(item=>item.label))];
+    // 服务领域只显示合同中实际识别到的（与「业务关键词与标签」一致），不列出全部候选领域
+    const labels=key=>[...new Set((key==='domains'?content.serviceDomains||[]:content[key]).map(item=>item.label))];
     const groups=[['goals','客户目标'],['services','实际服务活动'],['domains','服务领域'],['standards','标准与框架'],['training','培训内容'],['topics','相关控制与隐私主题'],['personnel','人员资质与经验'],['commercial','商务与数据使用约定'],['boundaries','服务边界'],['deliverables','交付成果']];
     return `<div class="service-profile"><h4>服务内容画像</h4><p>涉及系统：${escapeHtml(labels('systems').join('、')||'未提及')} · 客户行业：${escapeHtml(labels('industry').join('、')||'未提及')}</p>${groups.filter(([key])=>key!=='commercial').map(([key,label])=>{const values=labels(key);return key==='services'?`<p><strong>${label}：</strong>${values.length?values.map(value=>`<span class="service-topic">${escapeHtml(value)}</span>`).join(''):'未提取'}</p>`:values.length?`<details><summary>${label}（${values.length}）</summary><div class="profile-items">${content[key].filter((item,index,all)=>all.findIndex(x=>x.label===item.label)===index).map(item=>`<p><strong>${escapeHtml(item.label)}${item.status?' · '+escapeHtml(item.status):''}</strong></p>${String(item.label).replace(/\s/g,'')===String(item.evidence).replace(/\s/g,'')?'':`<p class="profile-evidence">${escapeHtml(DocumentView.readable(item.evidence))}</p>`}`).join('')}</div></details>`:'';}).join('')}</div>`;
   }

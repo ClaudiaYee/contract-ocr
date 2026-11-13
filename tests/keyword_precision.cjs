@@ -47,6 +47,12 @@ assert(!M.project(old).keywords.includes('的培训'));
 assert(M.project(old).systems.includes('手动系统'));
 const manual={...old,knowledgeProfile:{...old.knowledgeProfile,keywordsSelectionManual:true,keywords:['自定义词']}};
 assert(!M.project(manual).keywords.includes('自定义词'),'manual keywords are no longer kept');assert(M.project(manual).keywords.includes('差距分析'));
+// 3b. 服务内容画像的各类识别结果并入关键词；表格拆行的客户系统用途、服务边界（不提供的服务）不进入关键词
+const split=['服务范围','本次SOC 2鉴证覆盖：订单系统、仓储系统。','序号 系统数量 用途','1','2，国内海外各一套','提供统一登录服务','交付成果','1. SOC 2类型二报告；2. 管理建议书。','服务范围的限制','本次检查不包括财务核算系统，不提供内部审计服务。','本次鉴证涉及访问控制和变更管理。'].join('\n');
+const sp=S.analyze(split),spk=Array.from(sp.keywords,x=>x.label);
+assert(!sp.services.some(x=>/统一登录/.test(x.label)),'split system-table row is not a service');assert(!spk.some(k=>/统一登录/.test(k)),'nor a keyword: '+spk);
+for(const k of ['订单系统','仓储系统','访问控制','第三方鉴证'])assert(spk.includes(k),k+' from the service profile missing: '+spk);
+assert(!spk.some(k=>/内部审计|财务核算/.test(k)),'excluded services must not become keywords: '+spk);
 // 4. 只有关键词（他人旧总表行）时自动归类服务领域 / 具体服务
 const guess=S.classifyKeywords(['SOC2类型二鉴证','SOC2报告','内部控制']);assert(guess.domains.includes('第三方鉴证'),guess.domains);assert(guess.services.includes('SOC 2鉴证'),guess.services);assert.deepEqual(Array.from(S.classifyKeywords([]).domains),[]);
 console.log('PASS keyword precision: item titles, standards, SOC labels, systems and refresh');

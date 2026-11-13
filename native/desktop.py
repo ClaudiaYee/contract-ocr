@@ -257,7 +257,7 @@ def analysis_state(contract):
     return {k:contract.get(k) for k in ['id','analysisStatus','analysisRequest','analysisError','ruleAnalysisStatus','ruleAnalysisError','ruleAnalysisSeconds']}
 
 def analysis_fingerprint(contract):
-    return hashlib.sha256(('analysis-2.15.0:'+contract.get('uploadCategory','other')+':'+contract.get('rawText','')).encode()).hexdigest()
+    return hashlib.sha256(('analysis-2.15.1:'+contract.get('uploadCategory','other')+':'+contract.get('rawText','')).encode()).hexdigest()
 
 def queue_analysis(server, identifier, force=False):
     from analysis_scope import classify_scoped

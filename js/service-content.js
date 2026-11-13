@@ -171,6 +171,10 @@ const ServiceContent=(()=>{
  function refineKeywords(out,source){
   const text=String(source||''),evidenceFor=re=>{const line=text.split('\n').find(l=>re.test(l));return line?line.trim():'';};
   const adverbTraining=/(?:进行|开展|组织|提供)系统(?:性)?(?:地)?培训/;
+  // 客户系统清单表格（「系统数量 / 用途」「国内海外各一套」）里的用途描述不是我们提供的服务；OCR 常把表格拆成多行，向上看两行。
+  const sourceLines=text.split('\n').map(l=>l.trim());
+  const inSystemTable=evidence=>{const e=String(evidence||'').trim();if(!e)return false;const i=sourceLines.findIndex(l=>l&&(l===e||l.includes(e)||e.includes(l)));if(i<0)return false;return /各一套|[一二两三\d]套|系统数量|用途|功能说明/.test(sourceLines.slice(Math.max(0,i-2),i+1).join(' '))&&/^\d*\s*[，,]?\s*(?:[^，,。]*?\s)?提供.{1,16}$|服务$/.test(e.replace(/[。；;]$/,''));};
+  out.services=out.services.filter(x=>!inSystemTable(x.evidence));
   const sentenceLike=k=>/^[的和及与或等、]/.test(k)||k.length>20||(k.length>12&&/的|实施|进行|对于|关于|根据/.test(k));
   out.services=out.services.filter(x=>!(x.label==='系统培训'&&adverbTraining.test(x.evidence))).map(x=>{
    let k=x.label.trim().replace(/ISO(?:\/IEC)?\s*(\d{4,5})/gi,'ISO $1').replace(/SOC\s*([12])/gi,'SOC $1');
@@ -181,6 +185,7 @@ const ServiceContent=(()=>{
   let kept=out.keywords.filter(x=>{
    const k=x.label.trim();
    if(!k||isSoc(k))return false;
+   if(inSystemTable(x.evidence))return false;
    if(k==='系统培训'&&adverbTraining.test(x.evidence))return false;
    return true;
   }).map(x=>{
@@ -194,8 +199,13 @@ const ServiceContent=(()=>{
   const standards=[];for(const[re,labels]of STANDARD_TERMS)if(re.test(text))for(const label of labels)standards.push({label,evidence:evidenceFor(re)});
   const soc=socTerms(text).map(label=>({label,evidence:evidenceFor(/SOC\s*[12]/i)}));
   const seen=new Set(),key=v=>v.label.replace(/\s+/g,'').toLowerCase();
-  out.keywords=[...titles,...soc,...standards,...kept].filter(x=>{const k=key(x);if(seen.has(k))return false;seen.add(k);return true;});
   for(const name of systemNames(text))if(!out.systems.some(x=>x.label===name))out.systems.push({label:name,evidence:evidenceFor(new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')))});
+  // 服务内容画像中的各类识别结果也作为关键词（他人只能通过云盘总表的关键词检索）：
+  // 实际服务活动、服务领域、标准与框架、培训内容、相关控制与隐私主题、交付成果、涉及系统。
+  // 客户目标（句子）、服务边界（不做的事）、人员资质、商务约定不加入，避免搜到并未提供的服务。
+  const norm=label=>String(label||'').trim().replace(/ISO(?:\/IEC)?\s*(\d{4,5})/gi,'ISO $1').replace(/SOC\s*([12])/gi,'SOC $1');
+  const profileTerms=['services','serviceDomains','standards','training','topics','deliverables','systems'].flatMap(group=>(out[group]||[]).map(x=>({label:norm(x.label),evidence:x.evidence}))).filter(x=>x.label.length>=2&&!sentenceLike(x.label)&&!inSystemTable(x.evidence)&&!(x.label==='系统培训'&&adverbTraining.test(x.evidence))&&!/^SOC [12]$/.test(x.label));
+  out.keywords=[...titles,...soc,...standards,...kept,...profileTerms].filter(x=>{const k=key(x);if(seen.has(k))return false;seen.add(k);return true;});
  }
  const domainNames=['SOX','业财','内控','风险咨询'];
  const domainAliases=new Map();
