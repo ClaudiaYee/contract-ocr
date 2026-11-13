@@ -68,7 +68,7 @@ const App = (() => {
       stage('ready');
       updateStorageInfo();
       // 后台静默预热 OCR 引擎：首次上传扫描型 PDF 时不会卡住
-      document.getElementById('fileInput').disabled = false;
+      document.getElementById('fileInput').disabled = false;document.getElementById('uploadBtn').disabled = false;
       window.__CONTRACT_OCR_READY = true;
       setTimeout(warmupOCR, 1500);
       watchAnalysis();
@@ -158,14 +158,15 @@ const App = (() => {
       item.addEventListener('click', () => switchView(item.dataset.view));
     });
 
-    // 单一「合同上传口」：全文分析。已有安永模板类记录仍按原口径展示与分析。
-    for(const [zoneId,inputId,category] of [['uploadZone','fileInput','other']]){
-      const zone=document.getElementById(zoneId),input=document.getElementById(inputId);
-      zone.addEventListener('click',e=>{if(e.target!==input)input.click();});
-      zone.addEventListener('dragover',e=>{e.preventDefault();zone.classList.add('dragover');});
-      zone.addEventListener('dragleave',()=>zone.classList.remove('dragover'));
-      zone.addEventListener('drop',e=>{e.preventDefault();zone.classList.remove('dragover');handleFiles(Array.from(e.dataTransfer.files),category);});
-      input.addEventListener('change',e=>{handleFiles(Array.from(e.target.files),category);e.target.value='';});
+    // 「我的合同」的「上传合同」按钮：全文分析；也可以把文件拖到「我的合同」区域。
+    {
+      const area=document.getElementById('myContracts'),input=document.getElementById('fileInput'),button=document.getElementById('uploadBtn');
+      button.addEventListener('click',()=>{if(!input.disabled)input.click();});
+      input.addEventListener('change',e=>{handleFiles(Array.from(e.target.files),'other');e.target.value='';});
+      const hasFiles=e=>[...(e.dataTransfer?.types||[])].includes('Files');
+      area.addEventListener('dragover',e=>{if(!hasFiles(e)||input.disabled)return;e.preventDefault();area.classList.add('dragover');});
+      area.addEventListener('dragleave',e=>{if(!area.contains(e.relatedTarget))area.classList.remove('dragover');});
+      area.addEventListener('drop',e=>{if(!hasFiles(e)||input.disabled)return;e.preventDefault();area.classList.remove('dragover');handleFiles(Array.from(e.dataTransfer.files),'other');});
     }
     document.getElementById('cancelPendingBtn').addEventListener('click', cancelPendingJobs);
 
@@ -476,7 +477,7 @@ const App = (() => {
         </svg>
       </div>
       <div class="parse-result-info">
-        <div class="parse-result-name">${escapeHtml(file.name)}</div><div class="upload-category-label">${uploadCategory==='ey-template'?'安永模板类 · 仅分析附录一／工作说明书':'合同上传口 · 全文分析'}</div>
+        <div class="parse-result-name">${escapeHtml(file.name)}</div><div class="upload-category-label">${uploadCategory==='ey-template'?'安永模板类 · 仅分析附录一／工作说明书':'上传合同 · 全文分析'}</div>
         <div class="parse-result-meta">${formatSize(file.size)} · 等待解析</div>
       </div>
       <div class="parse-result-actions">

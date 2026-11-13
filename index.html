@@ -58,51 +58,6 @@
     <main class="content">
       <!-- 上传视图 -->
       <section class="view active" id="view-upload">
-        <div class="view-header">
-          <h2>批量识别合同 · 审计辅助 <small style="font-size:14px">v2.15.0</small></h2>
-          <p>支持拖拽上传或点击选择，系统将自动识别合同关键信息；识别完成后在下方「我的合同」中点「编辑」整理合同信息、关键词、系统与标签</p>
-        </div>
-
-        <div class="settings-form" style="margin-bottom:16px">
-          <p id="engineStatus">浏览器 OCR · Windows 原生版请从 Releases 下载并启动 ContractOCR.exe</p>
-          <label for="ocrMode">识别模式（对随后添加的文件生效）</label>
-          <select id="ocrMode"><option value="fast">快速 · 清晰印刷件，分辨率较低</option><option value="balanced" selected>均衡 · 日常审计（推荐）</option><option value="fine">精细 · 手写日期/签字页：每页最多 6 行关键内容用 PP-OCRv5 server 复核，较慢</option></select>
-          <p>按 Ctrl / Shift 多选，或一次拖入多份文件；处理中可继续添加。最多同时处理两份文件；原生版使用本机进程，浏览器版 OCR 排队执行。小字遗漏时可切换精细模式重新识别。</p>
-        </div>
-        <div class="upload-entry-grid single">
-        <div class="upload-zone" id="uploadZone">
-          <div class="upload-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="17 8 12 3 7 8"/>
-              <line x1="12" y1="3" x2="12" y2="15"/>
-            </svg>
-          </div>
-          <h3>合同上传口</h3>
-          <p>或者 <span class="upload-link">点击选择文件</span></p>
-          <p class="upload-hint">分析合同全文，支持 PDF 和图片，本地识别与保存</p>
-          <input type="file" id="fileInput" disabled accept=".pdf,application/pdf,image/png,image/jpeg,image/webp,image/bmp" multiple hidden>
-        </div>
-
-        </div>
-
-        <div style="display:flex;align-items:center;gap:12px;margin:16px 0">
-          <button class="btn btn-danger" id="cancelPendingBtn" type="button" disabled>取消全部未完成</button>
-          <span style="color:#64748b;font-size:13px">取消后移除未完成任务，已识别的合同保留</span>
-        </div>
-        <!-- 解析进度 -->
-        <div class="parse-progress" id="parseProgress" style="display:none;">
-          <div class="progress-header">
-            <span id="progressText">正在解析...</span>
-            <span id="progressCount">0/0</span>
-          </div>
-          <div class="progress-bar">
-            <div class="progress-fill" id="progressFill"></div>
-          </div>
-        </div>
-
-        <!-- 解析结果 -->
-        <div class="parse-results" id="parseResults"></div>
 
         <!-- 我的合同（原「合同列表」） -->
         <section class="my-contracts" id="myContracts" aria-labelledby="myContractsTitle">
@@ -110,6 +65,9 @@
             <div><h2 id="myContractsTitle">我的合同</h2></div>
           <div class="view-actions">
             <input type="search" id="searchInput" placeholder="筛选项目/甲方/乙方/关键词/全文..." class="search-input">
+            <select id="ocrMode" class="ocr-mode" aria-label="识别模式（对随后上传的文件生效）" title="识别模式，对随后上传的文件生效；小字遗漏时可切换精细模式重新识别"><option value="fast">快速识别</option><option value="balanced" selected>均衡识别（推荐）</option><option value="fine">精细识别（手写日期 / 签字页，较慢）</option></select>
+            <button class="btn btn-primary" id="uploadBtn" type="button" disabled title="选择 PDF 或图片识别合同，可按 Ctrl / Shift 多选；也可以把文件拖到「我的合同」区域">上传合同</button>
+            <input type="file" id="fileInput" disabled accept=".pdf,application/pdf,image/png,image/jpeg,image/webp,image/bmp" multiple hidden>
             <button class="btn btn-ghost" id="importBtn" type="button" title="导入系统设置中导出的 JSON 备份">导入备份</button>
             <input type="file" id="importFile" accept=".json" hidden>
             <button class="btn btn-ghost" id="exportSampleBtn" type="button">下载示例合同</button>
@@ -120,6 +78,19 @@
             </button>
           </div>
           </div>
+        <p id="engineStatus" class="engine-status" hidden></p>
+        <div class="upload-drop-hint">把 PDF 或图片拖到这里也可以上传识别</div>
+        <!-- 识别进度：有任务时才显示 -->
+        <div class="parse-progress" id="parseProgress" style="display:none;">
+          <div class="progress-header">
+            <span id="progressText">正在解析...</span>
+            <span class="progress-side"><span id="progressCount">0/0</span><button class="btn btn-ghost btn-sm" id="cancelPendingBtn" type="button" disabled title="取消后移除未完成任务，已识别的合同保留">取消全部未完成</button></span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill" id="progressFill"></div>
+          </div>
+        </div>
+        <div class="parse-results" id="parseResults"></div>
         <div class="contract-table-wrap" role="region" aria-label="我的合同表格" tabindex="0">
           <table class="contract-table">
             <thead>

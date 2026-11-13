@@ -83,7 +83,7 @@
 #upload-cloud-share .cloud-confirm{display:flex;gap:8px;align-items:center;margin:8px 0 16px;font-size:13px}
 #upload-cloud-share .cloud-preview{max-height:320px}
 
-.my-contracts{margin-top:36px;padding-top:24px;border-top:1px solid var(--border,#e2e8f0)}
+.my-contracts{margin-top:0;padding-top:0}
 .my-contracts .view-header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}
 /* 合同检索：搜索框居中，结果表格与「我的合同」相同并占满宽度 */
 #demo-searchPage{max-width:none}
@@ -107,3 +107,8 @@
 .remote-tag-groups{margin-top:18px}
 .remote-tag-row{display:grid;grid-template-columns:84px 1fr;gap:10px;align-items:start;padding:8px 0;border-top:1px solid #f0f0f3}
 .remote-tag-row>span{font-size:12px;color:#8a8a95;padding-top:3px}
+.my-contracts select.ocr-mode{width:170px;flex:0 0 170px;min-width:0;padding:8px 10px;border:1px solid #dcdce3;border-radius:8px;background:#fff;font-size:13px}
+.my-contracts .upload-drop-hint{display:none}
+.my-contracts.dragover{outline:2px dashed #2563eb;outline-offset:6px;border-radius:12px;background:#eff6ff}
+.my-contracts.dragover .upload-drop-hint{display:block;text-align:center;padding:18px;color:#2563eb;font-weight:600}
+.parse-progress .progress-side{display:flex;align-items:center;gap:12px}
