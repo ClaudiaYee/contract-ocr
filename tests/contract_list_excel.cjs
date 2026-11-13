@@ -56,6 +56,7 @@ await p.locator('#demo-rfUploader').selectOption('');await p.locator('#demo-rfPi
 await p.locator('#demo-rfPic').selectOption('');await p.waitForFunction(()=>document.querySelectorAll('#demo-resultBody tr[data-index]').length===2);
 // 签约时间搜索框：年月前缀、范围
 await p.locator('#demo-rfDate').fill('2026年10月');await p.waitForFunction(()=>document.querySelectorAll('#demo-resultBody tr[data-index]').length===1&&document.querySelector('#demo-resultBody tr[data-id="a1"]'));
+for(const q of ['2026.10.30','2026.10','20261030','2026/10/30','2026.10.01~2026.10.31'])await p.locator('#demo-rfDate').fill(q),await p.waitForFunction(()=>document.querySelectorAll('#demo-resultBody tr[data-index]').length===1&&document.querySelector('#demo-resultBody tr[data-id="a1"]'));
 await p.locator('#demo-rfDate').fill('2025-01~2025-12');await p.waitForFunction(()=>document.querySelector('#demo-resultBody .empty-row'));
 await p.locator('#demo-rfDate').fill('');await p.waitForFunction(()=>document.querySelectorAll('#demo-resultBody tr[data-index]').length===2);
 await remoteRow.locator('[data-select]').check();assert((await p.locator('#demo-selectedCount').innerText()).includes('已勾选 1'));

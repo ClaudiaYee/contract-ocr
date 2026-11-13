@@ -107,8 +107,8 @@ function itemPeople(item){
  if(item.type==='local'){const o=originals.find(x=>x.id===item.contract.id)||{};return {pic:item.contract.pic||'',eic:item.contract.eic||'',uploader:o.uploadedByName||hooks.uploader?.()||''};}
  return {pic:item.row['PIC']||'',eic:item.row['EIC']||'',uploader:item.row['上传者ID']||''};
 }
-// 签约时间筛选：年份 / 年月 / 日期前缀匹配，「~」「～」「至」表示范围（含两端）；2025.11、2025/11、2025年11月 均可。
-function normDate(v){return String(v||'').trim().replace(/[年月/.]/g,'-').replace(/日/g,'').replace(/-+$/,'').replace(/-(\d)(?=-|$)/g,'-0$1');}
+// 签约时间筛选：年份 / 年月 / 日期前缀匹配，「~」「～」「至」表示范围（含两端）；2025.09.11、2025/9/11、2025年9月11日、20250911 均可。
+function normDate(v){return String(v||'').trim().replace(/^(\d{4})(\d{2})(\d{2})?$/,(m,y,mo,d)=>y+'-'+mo+(d?'-'+d:'')).replace(/[年月/.]/g,'-').replace(/日/g,'').replace(/-+$/,'').replace(/-(\d)(?=-|$)/g,'-0$1');}
 function itemDate(item){return normDate(item.type==='local'?(originals.find(x=>x.id===item.contract.id)||{}).signDate:item.row['签约时间']);}
 function dateMatches(date,query){
  const q=String(query||'').trim();if(!q)return true;if(!date)return false;
