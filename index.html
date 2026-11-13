@@ -4,9 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>合同智能识别与可视化分析系统</title>
-  <link rel="stylesheet" href="css/style.css?v=2.14.9-scroll">
+  <link rel="stylesheet" href="css/style.css?v=2.15.0">
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
-  <link rel="stylesheet" href="css/vault.css?v=2.14.9">
+  <link rel="stylesheet" href="css/vault.css?v=2.15.0">
+  <link rel="stylesheet" href="css/search.css?v=2.15.0">
 </head>
 <body>
   <!-- 顶部导航 -->
@@ -22,19 +23,8 @@
         </svg>
         <div>
           <h1 class="brand-title">合同智能识别系统</h1>
-          <p class="brand-subtitle">本地化 · 增量统计 · 可视化分析</p>
+          <p class="brand-subtitle">本地化 · 合同识别 · 合同检索</p>
         </div>
-      </div>
-      <div class="header-actions">
-        <button class="btn btn-ghost" id="exportBtn" title="导出全部数据">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          导出
-        </button>
-        <button class="btn btn-ghost" id="importBtn" title="导入数据">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-          导入
-        </button>
-        <input type="file" id="importFile" accept=".json" hidden>
       </div>
     </div>
   </header>
@@ -47,25 +37,12 @@
         <button class="nav-item active" data-view="upload">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           <span>上传识别</span>
-        </button>
-        <button class="nav-item" data-view="list">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-          <span>合同列表</span>
           <span class="nav-badge" id="contractCount">0</span>
         </button>
-        <button class="nav-item" data-view="vault-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg><span>合同检索</span></button>
-        <button class="nav-item" data-view="vault-manage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg><span>合同整理与标签管理</span></button>
-        <button class="nav-item" data-view="dashboard">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-          <span>可视化分析</span>
-        </button>
-        <button class="nav-item" data-view="keywords">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/><line x1="11" y1="8" x2="11" y2="14"/></svg>
-          <span>业务与审计分析</span>
-        </button>
+        <button class="nav-item" data-view="vault-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><span>合同检索</span></button>
         <button class="nav-item" data-view="settings">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-          <span>设置</span>
+          <span>系统设置</span>
         </button>
       </nav>
       <div class="sidebar-footer">
@@ -81,85 +58,40 @@
     <main class="content">
       <!-- 上传视图 -->
       <section class="view active" id="view-upload">
-        <div class="view-header">
-          <h2>批量识别合同 · 审计辅助 <small style="font-size:14px">v2.14.9</small></h2>
-          <p>支持拖拽上传或点击选择，系统将自动识别合同关键信息</p>
-        </div>
 
-        <div class="settings-form" style="margin-bottom:16px">
-          <p id="engineStatus">浏览器 OCR · Windows 原生版请从 Releases 下载并启动 ContractOCR.exe</p>
-          <label for="ocrMode">识别模式（对随后添加的文件生效）</label>
-          <select id="ocrMode"><option value="fast">快速 · 清晰印刷件，分辨率较低</option><option value="balanced" selected>均衡 · 日常审计（推荐）</option><option value="fine">精细 · 手写日期/签字页：每页最多 6 行关键内容用 PP-OCRv5 server 复核，较慢</option></select>
-          <p>按 Ctrl / Shift 多选，或一次拖入多份文件；处理中可继续添加。最多同时处理两份文件；原生版使用本机进程，浏览器版 OCR 排队执行。小字遗漏时可切换精细模式重新识别。</p>
-        </div>
-        <div class="upload-entry-grid">
-        <div class="upload-zone" id="uploadZoneEy">
-          <div class="upload-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="17 8 12 3 7 8"/>
-              <line x1="12" y1="3" x2="12" y2="15"/>
-            </svg>
-          </div>
-          <h3>安永模板类上传口</h3>
-          <p>或者 <span class="upload-link">点击选择文件</span></p>
-          <p class="upload-hint">完整识别并保存全文，仅分析附录一／工作说明书的关键词和Tag</p>
-          <input type="file" id="fileInputEy" disabled accept=".pdf,application/pdf,image/png,image/jpeg,image/webp,image/bmp" multiple hidden>
-        </div>
-
-        <div class="upload-zone" id="uploadZone">
-          <div class="upload-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="17 8 12 3 7 8"/>
-              <line x1="12" y1="3" x2="12" y2="15"/>
-            </svg>
-          </div>
-          <h3>其他类合同上传口</h3>
-          <p>或者 <span class="upload-link">点击选择文件</span></p>
-          <p class="upload-hint">按现有方式分析合同全文，支持 PDF 和图片，本地识别与保存</p>
-          <input type="file" id="fileInput" disabled accept=".pdf,application/pdf,image/png,image/jpeg,image/webp,image/bmp" multiple hidden>
-        </div>
-
-        </div>
-
-        <div style="display:flex;align-items:center;gap:12px;margin:16px 0">
-          <button class="btn btn-danger" id="cancelPendingBtn" type="button" disabled>取消全部未完成</button>
-          <span style="color:#64748b;font-size:13px">取消后移除未完成任务，已识别的合同保留</span>
-        </div>
-        <!-- 解析进度 -->
-        <div class="parse-progress" id="parseProgress" style="display:none;">
-          <div class="progress-header">
-            <span id="progressText">正在解析...</span>
-            <span id="progressCount">0/0</span>
-          </div>
-          <div class="progress-bar">
-            <div class="progress-fill" id="progressFill"></div>
-          </div>
-        </div>
-
-        <!-- 解析结果 -->
-        <div class="parse-results" id="parseResults"></div>
-      </section>
-
-      <!-- 列表视图 -->
-      <section class="view" id="view-list">
-        <div class="view-header">
-          <h2>合同列表</h2>
+        <!-- 我的合同（原「合同列表」） -->
+        <section class="my-contracts" id="myContracts" aria-labelledby="myContractsTitle">
+          <div class="view-header">
+            <div><h2 id="myContractsTitle">我的合同</h2></div>
           <div class="view-actions">
-            <input type="search" id="searchInput" placeholder="搜索项目/甲方/乙方/全文..." class="search-input">
-            <button class="btn btn-ghost" id="exportExcelBtn" type="button" title="按当前列表导出 .xlsx">导出 Excel</button>
-            <button class="btn btn-ghost" id="importExcelBtn" type="button" title="导入本工具导出的同格式 .xlsx，按合同ID更新或新增">导入 Excel</button>
-            <input type="file" id="importExcelFile" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
-            <button class="btn btn-primary" id="cloudMergeBtn" type="button" title="把当前列表合并到云盘同步文件夹里的 Excel 总表">合并到云盘总表</button>
+            <input type="search" id="searchInput" placeholder="筛选项目/甲方/乙方/关键词/全文..." class="search-input">
+            <select id="ocrMode" class="ocr-mode" aria-label="识别模式（对随后上传的文件生效）" title="识别模式，对随后上传的文件生效；小字遗漏时可切换精细模式重新识别"><option value="fast">快速识别</option><option value="balanced" selected>均衡识别（推荐）</option><option value="fine">精细识别（手写日期 / 签字页，较慢）</option></select>
+            <button class="btn btn-primary" id="uploadBtn" type="button" disabled title="选择 PDF 或图片识别合同，可按 Ctrl / Shift 多选；也可以把文件拖到「我的合同」区域">上传合同</button>
+            <input type="file" id="fileInput" disabled accept=".pdf,application/pdf,image/png,image/jpeg,image/webp,image/bmp" multiple hidden>
+            <button class="btn btn-ghost" id="importBtn" type="button" title="导入系统设置中导出的 JSON 备份">导入备份</button>
+            <input type="file" id="importFile" accept=".json" hidden>
+            <button class="btn btn-ghost" id="exportSampleBtn" type="button">下载示例合同</button>
+            <button class="btn btn-primary" id="cloudMergeBtn" type="button" title="把当前列表的合同合并到系统设置中的 Excel 总表">合并到云盘总表</button>
             <button class="btn btn-danger" id="clearAllBtn">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
               清空全部
             </button>
           </div>
+          </div>
+        <p id="engineStatus" class="engine-status" hidden></p>
+        <div class="upload-drop-hint">把 PDF 或图片拖到这里也可以上传识别</div>
+        <!-- 识别进度：有任务时才显示 -->
+        <div class="parse-progress" id="parseProgress" style="display:none;">
+          <div class="progress-header">
+            <span id="progressText">正在解析...</span>
+            <span class="progress-side"><span id="progressCount">0/0</span><button class="btn btn-ghost btn-sm" id="cancelPendingBtn" type="button" disabled title="取消后移除未完成任务，已识别的合同保留">取消全部未完成</button></span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill" id="progressFill"></div>
+          </div>
         </div>
-
-        <div class="contract-table-wrap" role="region" aria-label="合同列表表格" tabindex="0">
+        <div class="parse-results" id="parseResults"></div>
+        <div class="contract-table-wrap" role="region" aria-label="我的合同表格" tabindex="0">
           <table class="contract-table">
             <thead>
               <tr>
@@ -170,201 +102,39 @@
                 <th>原始关键词</th>
                 <th>PIC</th>
                 <th>EIC</th>
-                <th>FIC</th>
                 <th>操作</th>
               </tr>
             </thead>
             <tbody id="contractTableBody">
               <tr class="empty-row">
-                <td colspan="9">暂无合同数据，请先上传PDF文件</td>
+                <td colspan="8">暂无合同数据，请先上传PDF文件</td>
               </tr>
             </tbody>
           </table>
         </div>
+        </section>
       </section>
 
-      <!-- 可视化视图 -->
-      <section class="view" id="view-dashboard">
-        <div class="view-header">
-          <h2>可视化分析</h2>
-          <p>合同数据汇总统计与多维度分析</p>
-        </div>
-
-        <!-- KPI 卡片 -->
-        <div class="kpi-grid">
-          <div class="kpi-card">
-            <div class="kpi-icon kpi-icon-blue">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            </div>
-            <div class="kpi-content">
-              <div class="kpi-label">合同总数</div>
-              <div class="kpi-value" id="kpiTotalCount">0</div>
-              <div class="kpi-trend">份</div>
-            </div>
-          </div>
-          <div class="kpi-card">
-            <div class="kpi-icon kpi-icon-green">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-            </div>
-            <div class="kpi-content">
-              <div class="kpi-label">签约总金额</div>
-              <div class="kpi-value" id="kpiTotalAmount">¥0</div>
-              <div class="kpi-trend" id="kpiAmountTrend">元</div>
-            </div>
-          </div>
-          <div class="kpi-card">
-            <div class="kpi-icon kpi-icon-purple">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3"/></svg>
-            </div>
-            <div class="kpi-content">
-              <div class="kpi-label">平均金额</div>
-              <div class="kpi-value" id="kpiAvgAmount">¥0</div>
-              <div class="kpi-trend">元/份</div>
-            </div>
-          </div>
-          <div class="kpi-card">
-            <div class="kpi-icon kpi-icon-orange">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-            </div>
-            <div class="kpi-content">
-              <div class="kpi-label">本月新增</div>
-              <div class="kpi-value" id="kpiMonthCount">0</div>
-              <div class="kpi-trend">份合同</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 图表区 -->
-        <div class="charts-grid">
-          <div class="chart-card chart-card-wide">
-            <div class="chart-header">
-              <h3>月度签约趋势</h3>
-              <span class="chart-sub">合同数量与签约金额走势</span>
-            </div>
-            <div class="chart-body" id="chartTrend"></div>
-          </div>
-
-          <div class="chart-card">
-            <div class="chart-header">
-              <h3>签约主体甲方TOP10</h3>
-              <span class="chart-sub">按合同数量排名</span>
-            </div>
-            <div class="chart-body" id="chartPartyA"></div>
-          </div>
-
-          <div class="chart-card">
-            <div class="chart-header">
-              <h3>签约主体乙方TOP10</h3>
-              <span class="chart-sub">按合同数量排名</span>
-            </div>
-            <div class="chart-body" id="chartPartyB"></div>
-          </div>
-
-          <div class="chart-card">
-            <div class="chart-header">
-              <h3>项目类型分布</h3>
-              <span class="chart-sub">基于交付物类型</span>
-            </div>
-            <div class="chart-body" id="chartCategory"></div>
-          </div>
-
-          <div class="chart-card">
-            <div class="chart-header">
-              <h3>金额区间分布</h3>
-              <span class="chart-sub">合同金额分级</span>
-            </div>
-            <div class="chart-body" id="chartAmountRange"></div>
-          </div>
-
-          <div class="chart-card chart-card-wide">
-            <div class="chart-header">
-              <h3>签约金额TOP10项目</h3>
-              <span class="chart-sub">按合同金额排序</span>
-            </div>
-            <div class="chart-body" id="chartTopAmount"></div>
-          </div>
-        </div>
-      </section>
-
-      <!-- 设置视图 -->
-      <!-- 业务与审计分析视图 -->
-      <section class="view" id="view-keywords">
-        <div class="view-header">
-          <div>
-            <h2>业务与审计分析</h2>
-            <p>优先查看合同服务内容、分类依据与复核结论；通用条款关键词可在辅助检索中查看</p>
-          </div>
-          <div class="view-actions">
-            <button class="btn btn-ghost" id="kwExportBtn">导出业务与复核 CSV</button>
-          </div>
-        </div>
-
-        <div class="kpi-grid">
-          <div class="kpi-card"><div class="kpi-content"><div class="kpi-label">业务分类线索</div><div class="kpi-value" id="kwKpiWords">0</div><div class="kpi-trend">个</div></div></div>
-          <div class="kpi-card"><div class="kpi-content"><div class="kpi-label">合同总数</div><div class="kpi-value" id="kwKpiContracts">0</div><div class="kpi-trend">份</div></div></div>
-          <div class="kpi-card"><div class="kpi-content"><div class="kpi-label">有业务线索的合同</div><div class="kpi-value" id="kwKpiHit">0</div><div class="kpi-trend">份</div></div></div>
-          <div class="kpi-card"><div class="kpi-content"><div class="kpi-label">已人工确认的合同</div><div class="kpi-value" id="kwKpiNone">0</div><div class="kpi-trend">份</div></div></div>
-        </div>
-        <div class="chart-card" style="margin-bottom:20px">
-          <div class="chart-header"><h3>业务类型分布</h3><div class="chart-sub">按服务内容归类，一份合同可涉及多类。点击柱条查看依据。</div></div>
-          <div class="chart-body" id="kwChart"></div><div id="kwBusinessMatches" style="padding:0 20px 16px"></div>
-        </div>
-        <div class="chart-card" id="businessIntentResults" style="padding:16px;margin-bottom:20px"></div>
-        <div class="kw-note" id="kwNote" style="display:none"></div>
-
-        <details class="keyword-tools"><summary>辅助检索：通用条款关键词（交付、赔偿、仲裁等）</summary>
-        <div class="kw-top">
-          <div class="chart-card kw-pool-card">
-            <div class="chart-header kw-pool-header">
-              <div><h3>关键字池</h3><div class="chart-sub">可批量输入，用空格、逗号或顿号分隔</div></div>
-              <button class="btn btn-ghost btn-sm" id="kwResetBtn">恢复默认</button>
-            </div>
-            <div class="kw-add">
-              <input type="text" id="kwInput" placeholder="例如：收入确认 验收 关联方 职责分离">
-              <select id="kwGroupSelect"></select>
-              <input type="text" id="kwNewGroup" placeholder="新分类名称" style="display:none">
-              <button class="btn btn-primary" id="kwAddBtn">添加</button>
-            </div>
-            <div class="kw-groups" id="kwPoolGroups"></div>
-          </div>
-
-        </div>
-
-        <div class="chart-card kw-result-card">
-          <div class="kw-tabs">
-            <button class="kw-tab active" data-mode="word">按关键字查看</button>
-            <button class="kw-tab" data-mode="contract">按合同查看</button>
-          </div>
-          <div id="kwResult"></div>
-        </div>
-        </details>
-      </section>
-
+      
       <section class="view" id="view-settings">
         <div class="view-header">
           <h2>系统设置</h2>
-          <p>本地化配置与数据管理</p>
+          <p>统一配置：本机并发、上传者ID、云盘总表路径与数据维护。</p>
         </div>
 
         <div class="settings-grid">
           <div class="settings-card">
-            <h3>识别规则配置</h3>
-            <p class="settings-desc">配置合同关键字段的提取正则表达式（高级）</p>
+            <h3>本机性能</h3>
+            <p class="settings-desc">识别时同时运行的本机进程数</p>
             <div class="settings-form">
-              <label>甲方识别关键词（用 | 分隔）</label>
-              <input type="text" id="cfgPartyA" placeholder="甲方|委托方|发包方|采购方">
-              <label>乙方识别关键词</label>
-              <input type="text" id="cfgPartyB" placeholder="乙方|受托方|承包方|供应商">
-              <label>金额识别关键词</label>
-              <input type="text" id="cfgAmount" placeholder="合同金额|总金额|签约金额">
               <label>本机并发（重启EXE生效）</label><select id="cfgWorkers"><option value="auto">自动（可用内存不足1.2GB时1个，一般2个，12线程以上3个）</option><option value="1">1个进程，节省内存</option><option value="2">2个进程，并行处理</option><option value="3">3个进程，12线程及以上CPU、内存充足</option><option value="4">4个进程，16线程及以上CPU、16GB内存</option></select><p id="nativeWorkerState"></p>
               <button class="btn btn-primary" id="saveCfgBtn">保存配置</button>
             </div>
           </div>
 
           <div class="settings-card">
-            <h3>数据管理</h3>
-            <p class="settings-desc">导出或清空本地存储的合同数据</p>
+            <h3>数据维护</h3>
+            <p class="settings-desc">备份、导出或清空本机合同库</p>
             <div class="data-actions">
               <button class="btn btn-primary" id="exportBackupBtn" hidden>完整备份ZIP（含可用原件）</button>
               <button class="btn btn-primary" id="exportJsonBtn">
@@ -376,10 +146,6 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 导出CSV
               </button>
-              <button class="btn btn-primary" id="exportSampleBtn">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                下载示例合同
-              </button>
               <button class="btn btn-danger" id="clearStorageBtn">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                 清空全部数据
@@ -388,14 +154,25 @@
           </div>
 
           <div class="settings-card">
-            <h3>云盘 Excel 总表</h3>
-            <p class="settings-desc">填写本机上由云盘（OneDrive、SharePoint、坚果云、百度网盘等）自动同步的文件夹，或其中某个 .xlsx 文件。在合同列表点击「合并到云盘总表」后，按合同ID更新已有行、追加新行，再由云盘自动同步。</p>
+            <h3>云盘 Excel 总表（保存路径）</h3>
+            <p class="settings-desc">合并到云盘总表、合同检索都使用这个位置。默认是团队内网共享文件夹，首次使用前请先在文件资源管理器中打开该地址并用域账号登录。也可以填写其他同步文件夹，或其中某个 .xlsx 文件。</p>
             <div class="settings-form">
               <label for="cfgCloudExcel">同步文件夹或总表路径</label>
-              <input type="text" id="cfgCloudExcel" placeholder="例如 D:\OneDrive\合同库  或  D:\OneDrive\合同库\合同识别总表.xlsx">
+              <input type="text" id="cfgCloudExcel" placeholder="\\cnshavapfl73.pacrim.ey.net\data\GZ_GROUP\CLIENT\TRDA\合同\测试">
               <p class="settings-desc" style="margin:4px 0 0">填文件夹时总表名为「合同识别总表.xlsx」。每次合并前自动备份为「…备份.xlsx」；总表里手动加的列会保留。</p>
               <button class="btn btn-primary" id="saveCloudExcelBtn" type="button">保存路径</button>
               <span id="cloudExcelState" role="status"></span>
+            </div>
+          </div>
+
+          <div class="settings-card">
+            <h3>上传者ID</h3>
+            <p class="settings-desc">合并到云盘总表时写入 Excel 的「上传者ID」列，用来看出每份合同是谁上传的。留空则使用本机 Windows 账户名。已上传合同的上传者不随修改变化。</p>
+            <div class="settings-form">
+              <label for="cfgUploader">上传者ID</label>
+              <input type="text" id="cfgUploader" maxlength="60">
+              <button class="btn btn-primary" id="saveUploaderBtn" type="button">保存上传者ID</button>
+              <span id="uploaderState" role="status"></span>
             </div>
           </div>
 
@@ -406,96 +183,44 @@
               <li><strong>PDF 解析引擎：</strong> 原生版 PyMuPDF / 浏览器版 PDF.js（含中文字符映射）</li>
               <li><strong>扫描件 / 图片 OCR：</strong> PaddleOCR PP-OCRv4（原生 CPU / 浏览器离线）</li>
               <li><strong>业务语义匹配：</strong> 原生版内置 BGE 中文模型，识别业务表述</li>
-              <li><strong>图表引擎：</strong> Apache ECharts</li>
               <li><strong>本地存储：</strong> 原生版：程序旁文件夹内的 JSON 数据及原文件；浏览器版：IndexedDB</li>
-              <li><strong>运行模式：</strong> 本机原生进程 / 浏览器备用 · v2.14.9</li>
+              <li><strong>运行模式：</strong> 本机原生进程 / 浏览器备用 · v2.15.0</li>
               <li><strong>隐私保护：</strong> 云盘总表由指定同步目录提供，合同原件及识别全文保存在本机</li>
             </ul>
           </div>
         </div>
       </section>
-<div class="vault-root"><section class="view" id="view-vault-search"><section id="demo-searchPage"><div class="view-header"><div><h2>合同检索</h2><p>搜索设置中指定的云盘 Excel 总表。行业、服务等高级筛选使用本机同一合同 ID 的资料。</p></div></div>
-<div class="workspace">
-<aside class="panel" aria-label="合同筛选"><div class="panel-title"><span class="step">01</span><h2>筛选条件</h2><button class="text-btn" id="demo-reset">重置全部</button></div>
-<div class="field"><label for="demo-level1">客户行业<span class="optional">三级联动</span></label><div class="industry"><select id="demo-level1" aria-label="一级行业"></select><select id="demo-level2" aria-label="二级行业" disabled></select><select id="demo-level3" aria-label="三级行业" disabled></select></div></div>
+<div class="vault-root"><section class="view" id="view-vault-search"><section id="demo-searchPage"><div class="view-header"><div><h2>合同检索</h2><p>检索本机合同与云盘 Excel 总表中他人上传的合同。他人上传的合同只能查看。</p></div></div>
+<div class="workspace search-workspace">
+<details class="search-advanced"><summary>高级筛选 · Engagement Name、服务领域、Tag</summary><aside class="panel" aria-label="合同筛选"><div class="panel-title"><span class="step">01</span><h2>筛选条件</h2><button type="button" class="text-btn" id="demo-reset">重置全部</button></div>
 <div class="field"><div class="field-title">服务领域<span class="optional">自动积累，可扩展</span></div><div class="tag-picker" id="demo-picker-services"></div></div><details class="field domain-catalog"><summary>本地服务领域库</summary><p class="hint">识别合同后自动积累；可补充领域及别名。具体活动与行业保持独立。</p><div id="demo-domainList"></div><label for="demo-domainName">领域名称</label><input id="demo-domainName" placeholder="例如：云治理与合规"><label for="demo-domainAliases">同义表达（选填）</label><input id="demo-domainAliases" placeholder="多个表达用顿号分隔"><button type="button" class="secondary" id="demo-saveDomain">保存领域</button><p class="hint" id="demo-domainStatus" role="status"></p></details>
 <div class="field"><div class="field-title">具体服务<span class="optional">按实际服务内容筛选</span></div><div class="tag-picker" id="demo-picker-specificTags"></div></div>
-<div class="field"><div class="field-title">客户业务诉求<span class="optional">多选或自定义</span></div><div class="tag-picker" id="demo-picker-needs"></div></div>
-<div class="field"><div class="field-title">涉及系统<span class="optional">多选或自定义</span></div><div class="tag-picker" id="demo-picker-systems"></div></div>
-<div class="field"><label for="demo-region1">项目所属区域<span class="optional">大区 / 省份 / 城市</span></label><div class="industry"><select id="demo-region1" aria-label="筛选大区"></select><select id="demo-region2" aria-label="筛选省份" disabled></select><select id="demo-region3" aria-label="筛选城市" disabled></select></div></div>
-<div class="field"><label for="demo-person">PIC / EIC / FIC 姓名</label><input id="demo-person" placeholder="输入任一负责人的姓名"></div>
-<div class="field"><label for="demo-min">合同金额区间<span class="optional">万元</span></label><div class="range"><input id="demo-min" type="number" min="0" placeholder="最低" aria-label="最低金额（万元）"><span>—</span><input id="demo-max" type="number" min="0" placeholder="最高" aria-label="最高金额（万元）"></div><p class="hint" id="demo-rangeHint">金额区间含边界，可仅填写一端。</p></div>
-<details class="field"><summary>更多筛选：企业特征、交付及负责人</summary><div class="field"><label for="demo-enterpriseSize">企业规模</label><input id="demo-enterpriseSize"></div><div class="field"><label for="demo-businessModel">业务模式</label><input id="demo-businessModel"></div><div class="field"><label for="demo-serviceTerm">服务期限 / 项目周期</label><input id="demo-serviceTerm"></div><div class="field"><label for="demo-deliverables">交付成果</label><input id="demo-deliverables"></div><div class="field"><label for="demo-eic">EIC 姓名</label><input id="demo-eic"></div><div class="field"><label for="demo-pic">PIC 姓名</label><input id="demo-pic"></div></details><p class="hint" style="border-top:1px solid var(--line);padding-top:17px;margin-top:23px">未选择即不限。输入后按 Enter 或点 ＋ 添加；同一组多选满足任一项，各组条件同时满足。</p>
-</aside>
-<section class="right" aria-label="合同检索与结果"><div class="panel search-panel"><div class="panel-title"><span class="step">02</span><h2>关键词检索</h2></div><form id="demo-searchForm"><div class="search-row"><input id="demo-keyword" placeholder="输入原文、关键词、Tag 或 PIC / EIC / FIC 姓名" aria-label="自定义关键词"><button class="primary" type="submit">检索合同 →</button></div></form><p class="hint">一次输入，同时查询精准与相关结果。精准为完整输入短语直接命中；相关基于预设业务关系，均需满足左侧筛选。</p><div class="suggestions"><span>试试搜索</span><button data-key="SOX">SOX</button><button data-key="财务转型">财务转型</button><button data-key="风险评估">风险评估</button><button data-key="流程优化">流程优化</button></div></div>
-<div id="demo-searchResults" hidden><div class="results-header"><h2>合同搜索结果<span class="count" id="demo-count" aria-live="polite"></span></h2><select id="demo-sort" aria-label="结果排序"><option value="default">默认排序</option><option value="desc">金额从高到低</option><option value="asc">金额从低到高</option></select></div><div class="summary" id="demo-summary"></div><section aria-labelledby="demo-directTitle"><div class="match-heading"><h3 id="demo-directTitle">A. 精准匹配</h3><span id="demo-directCount"></span></div><div class="cards" id="demo-cards"></div></section><section class="related-section" aria-labelledby="demo-relatedTitle"><div class="match-heading"><h3 id="demo-relatedTitle">B. 相关匹配</h3><span id="demo-relatedCount"></span></div><p class="hint" id="demo-relatedNote"></p><div class="cards" id="demo-relatedCards"></div></section></div></section>
-</div></section></section><section class="view" id="view-vault-manage"><section id="demo-managePage" aria-label="合同整理与标签管理">
-<div class="view-header"><div><h2>合同整理与标签管理</h2><p>整理本机合同的关键词及标签，合并到云盘总表后可检索。</p></div></div>
-
-<div class="manage-heading"><label for="demo-manageContract">选择历史合同</label><select id="demo-manageContract"></select><span class="save-status" id="demo-draftState">已载入</span></div>
-<div id="demo-emptyManage" class="panel" hidden>上传识别合同后，即可在这里整理。</div><form id="demo-editorForm"><div class="editor-grid">
-<section class="panel editor-panel basic-panel"><div class="panel-title"><span class="step">01</span><h2>合同基本信息</h2></div><div class="basic-grid">
-<div class="field"><label for="demo-editName">合同名称</label><input id="demo-editName" maxlength="120"></div><div class="field"><label for="demo-editAmount">合同金额（万元）</label><input id="demo-editAmount" type="number" min="0" step="any"></div>
-<div class="field"><label for="demo-editIndustry1">客户行业</label><div class="industry"><select id="demo-editIndustry1" aria-label="整理：一级行业"></select><select id="demo-editIndustry2" aria-label="整理：二级行业"></select><select id="demo-editIndustry3" aria-label="整理：三级行业"></select><button class="secondary" type="button" id="demo-customIndustry">添加自定义行业分类</button><div id="demo-industryCustomPanel" hidden><input id="demo-industryCustom1" placeholder="一级行业"><input id="demo-industryCustom2" placeholder="二级行业"><input id="demo-industryCustom3" placeholder="三级行业"><button class="secondary" type="button" id="demo-applyIndustry">应用分类</button></div></div></div><div class="field"><label for="demo-editSystems">涉及系统 / 技术</label><input id="demo-editSystems" placeholder="多个系统用逗号分隔，如 SAP、自研系统"><p class="hint">多个系统可用逗号、顿号或换行分隔。</p></div>
-<div class="field"><label for="demo-editRegion1">项目所属区域</label><div class="industry"><input id="demo-editRegion1" list="regionOptions1" placeholder="大区，可自定义" aria-label="合同大区"><datalist id="demo-regionOptions1"></datalist><input id="demo-editRegion2" list="regionOptions2" placeholder="省份，可自定义" aria-label="合同省份"><datalist id="demo-regionOptions2"></datalist><input id="demo-editRegion3" list="regionOptions3" placeholder="城市，可自定义" aria-label="合同城市"><datalist id="demo-regionOptions3"></datalist></div><p class="hint">支持已有地区或自定义；保存后同步筛选。</p></div><div><div class="field"><label for="demo-editEic">EIC 姓名</label><input id="demo-editEic" maxlength="60"></div><div class="field"><label for="demo-editPic">PIC 姓名</label><input id="demo-editPic" maxlength="60"></div><div class="field"><label for="demo-editFic">FIC 姓名</label><input id="demo-editFic" maxlength="60"></div></div>
-<div class="field"><label for="demo-editEnterpriseSize">企业规模</label><input id="demo-editEnterpriseSize"></div><div class="field"><label for="demo-editBusinessModel">业务模式</label><input id="demo-editBusinessModel"></div><div class="field"><label for="demo-editServiceTerm">服务期限 / 项目周期</label><input id="demo-editServiceTerm"></div><div class="field"><label for="demo-editDeliverables">交付成果</label><textarea id="demo-editDeliverables" placeholder="每行一项"></textarea></div><div class="field wide"><label for="demo-editNotes">项目笔记</label><textarea id="demo-editNotes"></textarea></div><div class="field"><label for="demo-editScope">合同服务范围</label><textarea id="demo-editScope"></textarea></div><div class="field"><label for="demo-editNeed">客户业务诉求</label><textarea id="demo-editNeed"></textarea></div></div></section>
-<section class="panel editor-panel"><div class="panel-title"><span class="step">02</span><h2>关键词提取</h2><button type="button" class="secondary" id="demo-extractKeywords">提取关键词</button></div><div class="field"><label for="demo-editOriginal">服务原文摘录</label><textarea id="demo-editOriginal" rows="6"></textarea></div><p class="hint">关键词与自动分类来自当前识别全文。本框可整理服务摘录；文字识别错误请在全文中修正。</p><div class="field-title" style="margin-top:20px">原始关键词</div><div id="demo-keywordsEditor"></div></section>
-<section class="panel editor-panel"><div class="panel-title"><span class="step">03</span><h2>Tag 分类</h2><button type="button" class="secondary" id="demo-generateTags">按维度分类</button></div><p class="hint">点击标签文字可修改或删除。按维度分类会依据全文替换服务领域与具体服务，自定义标签与笔记保留，保存后生效。</p><div id="demo-servicesEditor" class="tag-group"></div><div id="demo-specificTagsEditor" class="tag-group"></div><div id="demo-customTagsEditor" class="tag-group"></div></section>
-</div><div class="save-bar"><button class="primary" type="submit">保存并入库 ✓</button><button type="button" class="secondary" id="demo-discardDraft">撤销未保存修改</button><button type="button" class="secondary" id="demo-goSearch">前往合同检索 →</button><span class="save-status" id="demo-saveStatus" role="status" aria-live="polite">编辑内容仅在保存后同步到检索。</span></div></form>
-</section></section><dialog id="demo-detail" aria-labelledby="demo-detailTitle"><div class="modal-head"><button class="close" id="demo-close" aria-label="关闭详情">×</button><h2 id="demo-detailTitle"></h2></div><div class="modal-body" id="demo-vaultDetailBody"></div></dialog><datalist id="demo-serviceTagOptions"></datalist></div>
+<div class="field"><div class="field-title">系统<span class="optional">多选或自定义</span></div><div class="tag-picker" id="demo-picker-systems"></div></div>
+<div class="field"><label for="demo-engagementName">Engagement Name</label><input id="demo-engagementName"></div>
+<p class="hint" style="border-top:1px solid var(--line);padding-top:17px;margin-top:23px">未选择即不限。输入后按 Enter 或点 ＋ 添加；同一组多选满足任一项，各组条件同时满足。</p>
+</aside></details>
+<section class="right" aria-label="合同检索与结果"><div class="panel search-panel"><div class="panel-title"><h2>搜索合同与业务经验</h2></div><form id="demo-searchForm"><div class="search-row"><input id="demo-keyword" maxlength="200" placeholder="搜索关键词、Engagement Name、服务领域、Tag，多个词用空格 / 逗号 / 分号分隔" aria-label="搜索关键词"><button class="primary" type="submit">搜索</button></div></form><div class="match-mode"><label for="demo-matchMode">多个关键词</label><select id="demo-matchMode" aria-label="多个关键词的匹配方式"><option value="all">全部包含</option><option value="any">包含任一</option></select></div><p class="hint">可输入多个关键词，用空格、逗号、分号或顿号分隔；同时搜索本机合同和云盘总表，高级筛选只作用于本机合同。</p><div class="suggestions"><span>试试搜索</span><button type="button" data-key="SOX">SOX</button><button type="button" data-key="财务转型">财务转型</button><button type="button" data-key="风险评估">风险评估</button><button type="button" data-key="流程优化">流程优化</button></div></div>
+<div id="demo-searchResults" hidden><div class="results-header"><h2>合同搜索结果<span class="count" id="demo-count" aria-live="polite"></span></h2><select id="demo-sort" aria-label="结果排序"><option value="default">默认排序</option><option value="desc">签约时间：最新优先</option><option value="asc">签约时间：最早优先</option></select></div><div class="summary" id="demo-summary"></div>
+<div class="result-filters" aria-label="在搜索结果中筛选"><label>PIC<select id="demo-rfPic"><option value="">全部</option></select></label><label>EIC<select id="demo-rfEic"><option value="">全部</option></select></label><label>上传人<select id="demo-rfUploader"><option value="">全部</option></select></label><label>签约时间<input type="search" id="demo-rfDate" placeholder="如 2025-11，范围用 ~ 连接" title="输入年份、年月或日期，如 2025、2025-09、2025.09.11、2025年9月11日、20250911；用 ~ 或「至」表示范围，例如 2025.01~2025.06" autocomplete="off"></label><span class="result-selected" id="demo-selectedCount"></span><button type="button" class="primary" id="demo-exportResults">导出 Excel</button></div>
+<div class="contract-table-wrap" role="region" aria-label="合同搜索结果表格" tabindex="0"><table class="contract-table"><thead><tr><th class="check-col"><input type="checkbox" id="demo-selectAll" aria-label="全选当前结果"></th><th>项目名称</th><th>甲方</th><th>乙方</th><th>签约时间</th><th>原始关键词</th><th>PIC</th><th>EIC</th><th>上传人</th><th>操作</th></tr></thead><tbody id="demo-resultBody"></tbody></table></div></div></div></section>
+</div></section></section></div>
+<div class="vault-root vault-dialogs">
+<dialog id="demo-editorDialog" class="editor-dialog" aria-labelledby="demo-editorTitle"><div class="modal-head"><button type="button" class="close" id="demo-editorClose" aria-label="关闭编辑">×</button><h2 id="demo-editorTitle">编辑合同</h2><span class="save-status" id="demo-draftState"></span></div>
+<form id="demo-editorForm" class="modal-body"><div class="editor-grid">
+<section class="panel editor-panel basic-panel"><div class="panel-title"><span class="step">01</span><h2>合同信息</h2></div><div class="basic-grid">
+<div class="field wide"><label for="demo-editName">合同名称 <span class="required">*</span></label><input id="demo-editName" maxlength="120" required></div>
+<div class="field wide"><label for="demo-editEngagementName">Engagement Name</label><input id="demo-editEngagementName" maxlength="200"></div>
+<div class="field"><label for="demo-editPartyA">签约主体甲方</label><input id="demo-editPartyA" maxlength="200"></div><div class="field"><label for="demo-editPartyB">签约主体乙方</label><input id="demo-editPartyB" maxlength="200"></div>
+<div class="field"><label for="demo-editSignDate">签约时间</label><input id="demo-editSignDate" type="date"></div>
+<div class="field wide"><div class="field-title">关键词<span class="optional">由系统根据合同服务内容自动识别，不能手动修改</span></div><div id="demo-keywordsEditor" class="chip-editor"></div></div>
+<div class="field wide"><div class="field-title">系统<span class="optional">涉及的系统 / 技术，可自定义</span></div><div id="demo-systemsEditor" class="chip-editor"></div></div>
+<div class="field"><label for="demo-editEic">EIC 姓名</label><input id="demo-editEic" maxlength="60"></div><div class="field"><label for="demo-editPic">PIC 姓名</label><input id="demo-editPic" maxlength="60"></div>
+</div></section>
+<section class="panel editor-panel"><div class="panel-title"><span class="step">02</span><h2>Tag 分类</h2></div><p class="hint">服务领域与具体服务由系统根据合同服务内容自动识别，不能手动修改；识别规则更新后自动刷新。</p><div id="demo-servicesEditor" class="tag-group"></div><div id="demo-specificTagsEditor" class="tag-group"></div></section>
+</div><div class="save-bar"><button class="primary" type="submit">保存修改 ✓</button><button type="button" class="secondary" id="demo-discardDraft">撤销未保存修改</button><button type="button" class="secondary" id="demo-editorCancel">取消</button><span class="save-status" id="demo-saveStatus" role="status" aria-live="polite"></span></div></form>
+</dialog>
+<dialog id="demo-detail" aria-labelledby="demo-detailTitle"><div class="modal-head"><button class="close" id="demo-close" aria-label="关闭详情">×</button><h2 id="demo-detailTitle"></h2></div><div class="modal-body" id="demo-vaultDetailBody"></div></dialog><datalist id="demo-serviceTagOptions"></datalist></div>
     </main>
-  </div>
-
-  <!-- 编辑合同模态框 -->
-  <div class="modal" id="editModal" hidden>
-    <div class="modal-backdrop" data-close></div>
-    <div class="modal-dialog">
-      <div class="modal-header">
-        <h3>编辑合同信息</h3>
-        <button class="modal-close" data-close>×</button>
-      </div>
-      <div class="modal-body">
-        <div class="form-row">
-          <label>项目名称 <span class="required">*</span></label>
-          <input type="text" id="edit_projectName">
-        </div>
-        <div class="form-grid">
-          <div class="form-row">
-            <label>签约主体甲方</label>
-            <input type="text" id="edit_partyA">
-          </div>
-          <div class="form-row">
-            <label>签约主体乙方</label>
-            <input type="text" id="edit_partyB">
-          </div>
-        </div>
-        <div class="form-grid">
-          <div class="form-row">
-            <label>签约时间</label>
-            <input type="date" id="edit_signDate">
-          </div>
-          <div class="form-row">
-            <label>签约金额（元）</label>
-            <input type="number" id="edit_amount" step="any">
-          </div>
-        </div>
-        <div class="form-row">
-          <label>项目工作内容概述</label>
-          <textarea id="edit_content" rows="3"></textarea>
-        </div>
-        <div class="form-row">
-          <label>交付物</label>
-          <textarea id="edit_deliverables" rows="2"></textarea>
-          <label>合同服务目的（人工归纳，可留空）</label>
-          <textarea id="edit_auditPurpose" rows="3" placeholder="结合合同原文，说明委托方希望实现什么目标、受托方提供什么服务"></textarea>
-          <label><input type="checkbox" id="edit_auditPurposeReviewed"> 确认服务目的已对照当前全文（内容不变时也可勾选）</label>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-ghost" data-close>取消</button>
-        <button class="btn btn-primary" id="saveEditBtn">保存修改</button>
-      </div>
-    </div>
   </div>
 
   <!-- 详情模态框 -->
@@ -518,31 +243,28 @@
   <div class="toast-container" id="toastContainer"></div>
 
   <!-- 第三方库 -->
-  <script src="lib/pdfjs/pdf.min.js?v=2.14.9"></script>
-  <script src="lib/echarts/echarts.min.js?v=2.14.9"></script>
-  <script src="lib/pdfjs/cmaps-embedded.js?v=2.14.9"></script>
-  <script src="js/paddle-ocr.js?v=2.14.9"></script>
-  <script src="js/ocr-service.js?v=2.14.9"></script>
+  <script src="lib/pdfjs/pdf.min.js?v=2.15.0"></script>
+  <script src="lib/pdfjs/cmaps-embedded.js?v=2.15.0"></script>
+  <script src="js/paddle-ocr.js?v=2.15.0"></script>
+  <script src="js/ocr-service.js?v=2.15.0"></script>
 
   <!-- 应用脚本 -->
-  <script src="js/document-view.js?v=2.14.9"></script>
-  <script src="js/contract-scope.js?v=2.14.9"></script>
-  <script src="js/service-content.js?v=2.14.9"></script>
-  <script src="js/business-intent.js?v=2.14.9"></script>
-  <script src="js/critical-review.js?v=2.14.9"></script>
-  <script src="js/audit-review.js?v=2.14.9"></script>
-  <script src="js/native-documents.js?v=2.14.9"></script>
-  <script src="js/storage.js?v=2.14.9"></script>
-  <script src="js/extractor.js?v=2.14.9"></script>
-  <script src="js/pdf-parser.js?v=2.14.9"></script>
-  <script src="js/dashboard.js?v=2.14.9"></script>
-  <script src="js/keywords.js?v=2.14.9"></script>
-  <script src="js/contract-facts.js?v=2.14.9"></script>
-  <script src="js/analysis-results.js?v=2.14.9"></script>
-  <script src="js/business-analysis.js?v=2.14.9"></script>
-  <script src="js/domain-catalog.js?v=2.14.9"></script>
-  <script src="js/vault-model.js?v=2.14.9"></script>
-  <script src="js/vault.js?v=2.14.9-cloud-filters"></script>
-  <script src="js/app.js?v=2.14.9-cloud-filters"></script>
+  <script src="js/document-view.js?v=2.15.0"></script>
+  <script src="js/contract-scope.js?v=2.15.0"></script>
+  <script src="js/service-content.js?v=2.15.0"></script>
+  <script src="js/business-intent.js?v=2.15.0"></script>
+  <script src="js/critical-review.js?v=2.15.0"></script>
+  <script src="js/audit-review.js?v=2.15.0"></script>
+  <script src="js/native-documents.js?v=2.15.0"></script>
+  <script src="js/storage.js?v=2.15.0"></script>
+  <script src="js/extractor.js?v=2.15.0"></script>
+  <script src="js/pdf-parser.js?v=2.15.0"></script>
+  <script src="js/contract-facts.js?v=2.15.0"></script>
+  <script src="js/analysis-results.js?v=2.15.0"></script>
+  <script src="js/business-analysis.js?v=2.15.0"></script>
+  <script src="js/domain-catalog.js?v=2.15.0"></script>
+  <script src="js/vault-model.js?v=2.15.0"></script>
+  <script src="js/vault.js?v=2.15.0"></script>
+  <script src="js/app.js?v=2.15.0"></script>
 </body>
 </html>

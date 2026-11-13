@@ -20,7 +20,7 @@ import webbrowser
 
 from engine import initialize_engine, recognize_image
 
-VERSION = '2.14.9'
+VERSION = '2.15.0'
 HOST = '127.0.0.1'
 PORT = int(os.environ.get('CONTRACT_OCR_PORT', '18765'))
 MAX_BYTES = 32 * 1024 * 1024
@@ -196,9 +196,64 @@ def initialize_store():
         if path.name not in keep:cleanup_queue_file(path)
 
 
+# Team master workbook folder on the intranet share (log in once from File Explorer on each workstation).
+# CONTRACT_OCR_CLOUD_DEFAULT overrides it (tests and machines off the intranet; an empty value means no default).
+DEFAULT_CLOUD_PATH = os.environ.get('CONTRACT_OCR_CLOUD_DEFAULT', r'\\cnshavapfl73.pacrim.ey.net\data\GZ_GROUP\CLIENT\TRDA\合同\测试')
+
+
+def cloud_path():
+    configured=((get_record('config','cloudExcel') or {}).get('value') or {}).get('path','')
+    return str(configured).strip() or DEFAULT_CLOUD_PATH
+
+
+def write_fulltext_indexes(configured, rows):
+    """合并到云盘总表时，为本机合同写入加密全文检索索引（不含可读原文），他人检索时可搜到正文中的词。"""
+    import excel_table, fulltext_index
+    master = excel_table.master_path(configured)
+    for row in rows:
+        identifier = row.get('合同ID')
+        contract = get_record('contracts', identifier) if isinstance(identifier, str) and identifier else None
+        text = (contract or {}).get('rawText') or ''
+        if not text.strip():
+            continue
+        try:
+            fulltext_index.write(master, identifier, text)
+        except OSError:
+            raise excel_table.ExcelError('总表已合并，但全文检索索引写入失败，请检查文件夹权限后重新合并')
+
+
+def default_uploader():
+    """This computer's Windows / system account name, used until 系统设置 sets a 上传者ID."""
+    import getpass
+    for value in (os.environ.get('USERNAME'), os.environ.get('USER')):
+        if value and value.strip():return value.strip()
+    try:return getpass.getuser() or '本机用户'
+    except Exception:return '本机用户'
+
+
+def uploader_name():
+    """上传者ID recorded on contracts uploaded from this computer (no login: one uploader per workstation)."""
+    configured=((get_record('config','uploader') or {}).get('value') or {}).get('name','')
+    return str(configured).strip()[:60] or default_uploader()
+
+
+UPLOAD_FIELDS=('uploadedByName','uploadedAt')
+
+
+def stamp_uploader(contract, existing=None):
+    """Keep the first recorded uploader; new records get this computer's uploader. Client values are ignored."""
+    for field in UPLOAD_FIELDS:contract.pop(field,None)
+    if existing and existing.get('uploadedByName'):
+        for field in UPLOAD_FIELDS:
+            if field in existing:contract[field]=existing[field]
+    elif not existing:
+        contract['uploadedByName']=uploader_name();contract['uploadedAt']=int(time.time()*1000)
+    return contract
+
+
 def merge_recovered(existing, incoming):
     merged={**existing,**incoming}
-    for key in ['reviewerNotes','serviceSummary','businessReview','businessReviewEditedAt','pageChecks','criticalChecks','criticalReviewHistory','auditPurpose','auditPurposeEditedAt','originalRawText','editedLayoutPages','editedLayoutFingerprint','editedLayoutMode','rawTextEditedAt','manualFieldsEditedAt','manualEditHistory','amountManuallyEdited','knowledgeProfile']:
+    for key in ['uploadedByName','uploadedAt','reviewerNotes','serviceSummary','businessReview','businessReviewEditedAt','pageChecks','criticalChecks','criticalReviewHistory','auditPurpose','auditPurposeEditedAt','originalRawText','editedLayoutPages','editedLayoutFingerprint','editedLayoutMode','rawTextEditedAt','manualFieldsEditedAt','manualEditHistory','amountManuallyEdited','knowledgeProfile']:
         if key in existing:merged[key]=existing[key]
     if existing.get('rawTextEditedAt'):
         merged['recoveredOCRText']=incoming.get('rawText','')
@@ -218,7 +273,7 @@ def analysis_state(contract):
     return {k:contract.get(k) for k in ['id','analysisStatus','analysisRequest','analysisError','ruleAnalysisStatus','ruleAnalysisError','ruleAnalysisSeconds']}
 
 def analysis_fingerprint(contract):
-    return hashlib.sha256(('analysis-2.14.9:'+contract.get('uploadCategory','other')+':'+contract.get('rawText','')).encode()).hexdigest()
+    return hashlib.sha256(('analysis-2.15.1:'+contract.get('uploadCategory','other')+':'+contract.get('rawText','')).encode()).hexdigest()
 
 def queue_analysis(server, identifier, force=False):
     from analysis_scope import classify_scoped
@@ -409,7 +464,7 @@ def _finish_job(future, job, input_path, progress_path):
             job.update(status='done', ocrSeconds=round(float(result.get('seconds') or 0),3))
             job.pop('result', None)
             contract = {'id': job['id'], 'projectName': Path(job['filename']).stem, 'sourceFile': job['filename'],
-                        'uploadCategory':job.get('uploadCategory','other'),'managedBusinessAnalysis':True,'ruleAnalysisStatus':'queued','fileSize': job['fileSize'], 'createdAt': job['createdAt'], 'needsExtraction': True, **result}
+                        **{k:job[k] for k in UPLOAD_FIELDS if k in job},'uploadCategory':job.get('uploadCategory','other'),'managedBusinessAnalysis':True,'ruleAnalysisStatus':'queued','fileSize': job['fileSize'], 'createdAt': job['createdAt'], 'needsExtraction': True, **result}
             with DB_LOCK:
                 existing=get_record('contracts',job['id']) or {}
                 contract=merge_recovered(existing,contract)
@@ -525,6 +580,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return self.respond_raw(raw_records('contracts'))
         if path == '/api/config':
             values = {item['key']: item['value'] for item in records('config')}
+            values['uploaderDefault'] = default_uploader()
+            values['cloudExcelDefault'] = DEFAULT_CLOUD_PATH
             return self.respond(200, values)
         if path == '/api/jobs':
             return self.respond(200, [{k: v for k, v in job.items() if k != 'result'} for job in job_records()])
@@ -647,7 +704,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 headers, rows = excel_table.read_xlsx(data)
                 return self.respond(200, {'headers': headers, 'rows': rows})
             payload = json.loads(data)
-            configured = ((get_record('config', 'cloudExcel') or {}).get('value') or {}).get('path', '')
+            configured = cloud_path()
             if path == '/api/excel/cloud-search':
                 query = payload.get('query')
                 if not isinstance(query, str) or len(query) > 200:
@@ -664,10 +721,17 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     return self.respond(400, {'error': '搜索筛选条件格式不正确'})
                 return self.respond(200, excel_table.search_master(
                     configured, query, people, set(eligible) if eligible is not None else None,
-                    set(direct), set(related)))
+                    set(direct), set(related), payload.get('matchAny') is True))
             rows = payload.get('rows')
             if not isinstance(rows, list) or not all(isinstance(row, dict) for row in rows):
                 return self.respond(400, {'error': '表格数据格式不正确'})
+            # 上传者ID comes from this computer's contract records, never from the browser or an edited Excel row.
+            # 导出检索结果时，他人上传（不在本机）的行保留总表中的上传者ID。
+            for row in rows:
+                contract = get_record('contracts', row.get('合同ID')) if isinstance(row.get('合同ID'), str) and row.get('合同ID') else None
+                if contract is None and path == '/api/excel/export' and isinstance(row.get('上传者ID'), str) and row.get('上传者ID').strip():
+                    continue
+                row['上传者ID'] = (contract or {}).get('uploadedByName') or uploader_name()
             if path == '/api/excel/export':
                 body = excel_table.write_xlsx(excel_table.COLUMNS, rows)
                 self.send_response(200)
@@ -678,7 +742,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 self.wfile.write(body)
                 return None
             with EXCEL_LOCK:
-                return self.respond(200, excel_table.merge_into_master(configured, rows))
+                result = excel_table.merge_into_master(configured, rows)
+                write_fulltext_indexes(configured, rows)
+            return self.respond(200, result)
         except excel_table.ExcelError as error:
             return self.respond(422, {'error': str(error)})
         except Exception as error:
@@ -713,6 +779,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     progress_path = DATA_ROOT / 'queue' / (job_id + '.progress.json')
                     input_path.write_bytes(data)
                     job = {'id': job_id, 'filename': filename, 'fileSize': length, 'mode': mode, 'uploadCategory':category,'status': 'queued', 'createdAt': int(time.time() * 1000)}
+                    job.update(uploadedByName=uploader_name(),uploadedAt=job['createdAt'])
                     put('jobs', job_id, job)
                     submit_stored_job(self.server,job)
                     return self.respond(202, {'id': job_id})
@@ -750,7 +817,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return self.respond(200,self.server.semantic_pool.submit(classify_scoped,payload.get('text',''),category).result(timeout=180))
             if path == '/api/config':
                 key = payload.get('key')
-                if key not in ['main', 'keywordPool', 'serviceDomains', 'cloudExcel']:
+                if key not in ['main', 'keywordPool', 'serviceDomains', 'cloudExcel', 'uploader']:
                     return self.respond(400, {'error': 'Invalid config key'})
                 put('config', key, {'key': key, 'value': payload.get('value')})
                 return self.respond(200, {'ok': True})
@@ -796,6 +863,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                             return self.respond(409,{'error':'识别结果已更新，请刷新后再保存；当前草稿可先复制保留'})
                         if action=='batch' and existing:continue
                         if action=='add' and existing:contract=merge_recovered(existing,contract)
+                        stamp_uploader(contract,existing)
                         changed=bool(existing and analysis_fingerprint(existing)!=analysis_fingerprint(contract))
                         if existing and not changed:
                             if existing.get('managedBusinessAnalysis'):contract['needsExtraction']=existing.get('needsExtraction',True)
@@ -877,10 +945,9 @@ def main():
         elif contract.get('analysisStatus') in ['queued','running']:
             queue_analysis(server,contract['id'])
         elif contract.get('managedBusinessAnalysis') and contract.get('analysisStatus')=='done' and contract.get('analysisFingerprint')!=analysis_fingerprint(contract):
-            # 2.14.9 起一般条款不参与分析：只重新分析含一般条款的已有合同，其余保持原结果。
-            from analysis_scope import general_sections
-            try:
-                if general_sections(contract.get('rawText','')):queue_analysis(server,contract['id'])
+            # 2.15.0 关键词规则更精确（服务分项标题、标准与体系名称、SOC 写法统一、客户系统名称），
+            # 已有合同在后台重新分析一次；手动改过的关键词 / 标签不会被覆盖。
+            try:queue_analysis(server,contract['id'])
             except Exception:
                 pass  # 重新分析失败不影响启动，原结果保留，可在详情页重新分析
     print(f'合同识别 {VERSION}：正在启动本机OCR引擎，首次识别稍需等待。')

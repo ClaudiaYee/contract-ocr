@@ -61,15 +61,14 @@ const App = (() => {
       stage('loadContracts');await loadContracts();
       stage('bindEvents');bindEvents();
       window.addEventListener('business-analysis-updated',async()=>{try{await loadContracts();watchAnalysis();const badge=document.getElementById('analysisState');if(badge&&!document.getElementById('detailModal').hidden&&!fullTextDraft&&!reviewDraft?.dirty()){const top=document.getElementById('detailBody').scrollTop;openDetailModal(badge.dataset.contractId);document.getElementById('detailBody').scrollTop=top;}}catch(e){console.warn(e.message);}});
-      Vault.init({searchCloud: searchCloudExcel, navigate: switchView, saved: loadContracts});
+      Vault.init({searchCloud: searchCloudExcel, saved: loadContracts, toast: showToast, openDetail: id => openDetailModal(id), deleteContract, uploader: myUploader, exportResults});
+      refreshVisibleVault();renderTable();
       stage('loadConfig');await loadConfigToUI();
       stage('recoverJobs');await recoverNativeJobs();
-      stage('keywordPool');if (typeof KeywordPool !== 'undefined') { KeywordPool.bind(); await KeywordPool.load(); }
       stage('ready');
       updateStorageInfo();
       // 后台静默预热 OCR 引擎：首次上传扫描型 PDF 时不会卡住
-      document.getElementById('fileInput').disabled = false;
-      document.getElementById('fileInputEy').disabled = false;
+      document.getElementById('fileInput').disabled = false;document.getElementById('uploadBtn').disabled = false;
       window.__CONTRACT_OCR_READY = true;
       setTimeout(warmupOCR, 1500);
       watchAnalysis();
@@ -113,15 +112,15 @@ const App = (() => {
     }
     try{await DomainCatalog.learn(contracts);}catch(e){showToast("合同已保留，服务领域库同步失败："+e.message,"warning");}
     updateContractCount();
-    renderTable();
     refreshVisibleVault();
+    renderTable();
     for(const card of document.querySelectorAll('.parse-result-card[data-contract-id]')){const c=contracts.find(x=>x.id===card.dataset.contractId);if(!c)continue;const edit=card.querySelector('[data-action="edit"]');if(edit)edit.disabled=AnalysisResults.managed(c)&&!AnalysisResults.ready(c);const meta=card.querySelector('.parse-result-meta');if(meta)meta.textContent=meta.textContent.replace(ANALYSIS_LABEL_PATTERN,cardAnalysisLabel(c));}
     return contracts;
   }
 
+  // 检索已并入合同列表：每次合同数据变化都同步给检索与编辑弹窗。
   function refreshVisibleVault() {
-    const active=document.querySelector('.view.active');
-    if(typeof Vault!=='undefined' && active?.id?.startsWith('view-vault-')) Vault.refresh(contracts,active.id==='view-vault-search'?'search':'manage');
+    if(typeof Vault!=='undefined') Vault.refresh(contracts);
   }
 
   function updateContractCount() {
@@ -159,21 +158,22 @@ const App = (() => {
       item.addEventListener('click', () => switchView(item.dataset.view));
     });
 
-    // Each upload port fixes the analysis policy for its entire batch.
-    for(const [zoneId,inputId,category] of [['uploadZone','fileInput','other'],['uploadZoneEy','fileInputEy','ey-template']]){
-      const zone=document.getElementById(zoneId),input=document.getElementById(inputId);
-      zone.addEventListener('click',e=>{if(e.target!==input)input.click();});
-      zone.addEventListener('dragover',e=>{e.preventDefault();zone.classList.add('dragover');});
-      zone.addEventListener('dragleave',()=>zone.classList.remove('dragover'));
-      zone.addEventListener('drop',e=>{e.preventDefault();zone.classList.remove('dragover');handleFiles(Array.from(e.dataTransfer.files),category);});
-      input.addEventListener('change',e=>{handleFiles(Array.from(e.target.files),category);e.target.value='';});
+    // 「我的合同」的「上传合同」按钮：全文分析；也可以把文件拖到「我的合同」区域。
+    {
+      const area=document.getElementById('myContracts'),input=document.getElementById('fileInput'),button=document.getElementById('uploadBtn');
+      button.addEventListener('click',()=>{if(!input.disabled)input.click();});
+      input.addEventListener('change',e=>{handleFiles(Array.from(e.target.files),'other');e.target.value='';});
+      const hasFiles=e=>[...(e.dataTransfer?.types||[])].includes('Files');
+      area.addEventListener('dragover',e=>{if(!hasFiles(e)||input.disabled)return;e.preventDefault();area.classList.add('dragover');});
+      area.addEventListener('dragleave',e=>{if(!area.contains(e.relatedTarget))area.classList.remove('dragover');});
+      area.addEventListener('drop',e=>{if(!hasFiles(e)||input.disabled)return;e.preventDefault();area.classList.remove('dragover');handleFiles(Array.from(e.dataTransfer.files),'other');});
     }
     document.getElementById('cancelPendingBtn').addEventListener('click', cancelPendingJobs);
 
-    // 搜索
-    document.getElementById('searchInput').addEventListener('input', e => {
-      renderTable(e.target.value.trim().toLowerCase());
-    });
+    // 合同列表筛选（他人上传的合同在「合同检索」中查找）
+    document.getElementById('searchInput').addEventListener('input', () => renderTable());
+    // 上传到云端总表
+    document.getElementById('saveUploaderBtn').addEventListener('click',saveUploader);
 
     // 清空全部
     document.getElementById('clearAllBtn').addEventListener('click', () => {
@@ -191,7 +191,6 @@ const App = (() => {
     });
 
     // 导出/导入
-    document.getElementById('exportBtn').addEventListener('click', exportJSON);
     document.getElementById('exportJsonBtn').addEventListener('click', exportJSON);
     document.getElementById('exportBackupBtn').addEventListener('click', exportCompleteBackup);
     document.getElementById('exportCsvBtn').addEventListener('click', exportCSV);
@@ -201,16 +200,7 @@ const App = (() => {
       document.getElementById('importFile').click();
     });
     document.getElementById('importFile').addEventListener('change', importData);
-    document.getElementById('exportExcelBtn').addEventListener('click', exportExcel);
     document.getElementById('cloudMergeBtn').addEventListener('click', cloudMerge);
-    document.getElementById('importExcelBtn').addEventListener('click', () => { if(!needDesktop())document.getElementById('importExcelFile').click(); });
-    document.getElementById('importExcelFile').addEventListener('change', async e => {
-      const file=e.target.files[0];e.target.value='';if(!file)return;
-      const button=document.getElementById('importExcelBtn');button.disabled=true;
-      try{const r=await importExcel(file);showToast(`Excel 已整合：新增 ${r.added} 份，更新 ${r.updated} 份，无变化 ${r.unchanged} 份`,'success');}
-      catch(error){showToast('导入失败：'+error.message,'error');}
-      finally{button.disabled=false;}
-    });
     document.getElementById('saveCloudExcelBtn').addEventListener('click', saveCloudExcel);
 
     // 设置 - 保存配置
@@ -228,7 +218,6 @@ const App = (() => {
     // Initial configuration is awaited by init().
 
     // 编辑模态框
-    document.getElementById('saveEditBtn').addEventListener('click', saveEdit);
     document.querySelectorAll('[data-close]').forEach(el => {
       el.addEventListener('click', closeModals);
     });
@@ -236,30 +225,22 @@ const App = (() => {
 
   // ============== 视图切换 ==============
   function switchView(viewName) {
-    if (document.getElementById("view-vault-manage").classList.contains("active") && !Vault.canLeave()) return false;
+    if (viewName === 'vault-manage') viewName = 'list'; // 合同整理已并入「编辑」弹窗
+    if (viewName === 'dashboard' || viewName === 'keywords') viewName = 'list'; // 已移除的分析页
+    // 我的合同（原合同列表）与上传识别在同一页
+    const toMine = viewName === 'list'; if (toMine || viewName === 'cloud-share') viewName = 'upload';
+    if (!Vault.canLeave()) return false;
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     document.querySelector(`.nav-item[data-view="${viewName}"]`).classList.add('active');
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     document.getElementById(`view-${viewName}`).classList.add('active');
 
-    if (viewName === 'vault-search' || viewName === 'vault-manage') {
-      try { Vault.render(contracts, viewName === 'vault-search' ? 'search' : 'manage'); }
-      catch(error){
-        console.error('知识页面加载失败',error);
-        const box=document.getElementById(viewName==='vault-search'?'demo-searchPage':'demo-managePage');
-        box.innerHTML='<h1>页面加载失败</h1><p>合同仍保存在本地。请按 Ctrl + Shift + R 重新加载页面后再试。</p>';
-        showToast('页面加载失败：'+error.message,'error');
-      }
-    } else if (viewName === 'dashboard') {
-      // 重新渲染图表（确保尺寸正确）
-      setTimeout(() => {
-        Dashboard.render(contracts);
-      }, 50);
+    if (viewName === 'upload') {
+      if (toMine) requestAnimationFrame(() => document.getElementById('myContracts').scrollIntoView({ block: 'start' }));
+    } else if (viewName === 'vault-search') {
+      Vault.refresh(contracts);
     } else if (viewName === 'settings') {
       loadConfigToUI();
-    } else if (viewName === 'keywords') {
-      renderBusinessCategories();
-      KeywordPool.render(contracts, id => openDetailModal(id));
     }
     return true;
   }
@@ -496,7 +477,7 @@ const App = (() => {
         </svg>
       </div>
       <div class="parse-result-info">
-        <div class="parse-result-name">${escapeHtml(file.name)}</div><div class="upload-category-label">${uploadCategory==='ey-template'?'安永模板类 · 仅分析附录一／工作说明书':'其他类合同 · 全文分析'}</div>
+        <div class="parse-result-name">${escapeHtml(file.name)}</div><div class="upload-category-label">${uploadCategory==='ey-template'?'安永模板类 · 仅分析附录一／工作说明书':'上传合同 · 全文分析'}</div>
         <div class="parse-result-meta">${formatSize(file.size)} · 等待解析</div>
       </div>
       <div class="parse-result-actions">
@@ -532,7 +513,7 @@ const App = (() => {
           const editBtn = actions.querySelector('[data-action="edit"]');
           const newContract=contracts.find(c=>c.id===contractId);
           if(newContract){
-            if(editBtn){editBtn.style.display='block';editBtn.disabled=AnalysisResults.managed(newContract)&&!AnalysisResults.ready(newContract);editBtn.onclick=()=>openEditModal(newContract.id);}
+            if(editBtn){editBtn.style.display='block';editBtn.disabled=AnalysisResults.managed(newContract)&&!AnalysisResults.ready(newContract);editBtn.onclick=()=>Vault.openEditor(newContract.id);}
             const textBtn=actions.querySelector('[data-action="text"]');
             if(textBtn){textBtn.style.display='block';textBtn.onclick=()=>openDetailModal(newContract.id,true);}
           }
@@ -548,26 +529,34 @@ const App = (() => {
   }
 
   // ============== 表格渲染 ==============
-  // 合同列表：原始关键词与 PIC / EIC / FIC 来自整理页同一份资料（VaultModel），按合同对象缓存。
+  // 合同列表：原始关键词与 PIC / EIC 来自整理页同一份资料（VaultModel），按合同对象缓存。
   const listProfiles=new WeakMap();
   function listProfile(c){
     let p=listProfiles.get(c);
     if(!p){try{p=VaultModel.project(c);}catch{p={keywords:[],pic:'',eic:'',fic:''};}listProfiles.set(c,p);}
     return p;
   }
-  function listFiltered(filter=''){
+  // 合同列表：本机合同；云盘总表中他人上传的合同在「合同检索」中出现。
+  let uploaderSelf='';
+  const myUploader=()=>uploaderSelf||'本机';
+  function listFiltered(){
+    const filter=(document.getElementById('searchInput')?.value||'').trim().toLowerCase();
     if(!filter)return contracts;
-    return contracts.filter(c=>{const p=listProfile(c);return [c.projectName,c.partyA,c.partyB,c.content,c.deliverables,c.sourceFile,c.rawText,...(p.keywords||[]),p.pic,p.eic,p.fic].filter(Boolean).join(' ').toLowerCase().includes(filter);});
+    return contracts.filter(c=>{const p=listProfile(c);return [c.projectName,c.partyA,c.partyB,c.content,c.deliverables,c.sourceFile,c.rawText,c.uploadedByName,c.engagementName,...(p.keywords||[]),...(p.systems||[]),p.pic,p.eic].filter(Boolean).join(' ').toLowerCase().includes(filter);});
   }
   function listColumns(c){
     const p=listProfile(c),keywords=p.keywords||[],shown=keywords.slice(0,6);
     const chips=shown.length?shown.map(k=>`<span class="list-kw">${escapeHtml(k)}</span>`).join('')+(keywords.length>shown.length?`<span class="list-kw more">+${keywords.length-shown.length}</span>`:''):'<span class="list-kw-empty">-</span>';
-    return `<td class="kw-cell" title="${escapeHtml(keywords.join('；'))}"><div class="list-kws">${chips}</div></td>`+['pic','eic','fic'].map(k=>`<td class="person-cell">${escapeHtml(p[k]||'-')}</td>`).join('');
+    return `<td class="kw-cell" title="${escapeHtml(keywords.join('；'))}"><div class="list-kws">${chips}</div></td>`+['pic','eic'].map(k=>`<td class="person-cell">${escapeHtml(p[k]||'-')}</td>`).join('');
   }
+  // 云盘总表 / 导出的行：不含 Engagement Code、Code Description、来源文件、FIC（可能透露客户未公开事项）。
+  // 服务领域、具体服务为空时按原始关键词自动归类；具体服务仍归不出时填原始关键词，避免留空。
   function excelRows(list){
-    return list.map(c=>{const p=listProfile(c);return {'项目名称':c.projectName||'','甲方':c.partyA||'','乙方':c.partyB||'','签约时间':c.signDate||'','原始关键词':(p.keywords||[]).join('；'),'PIC':p.pic||'','EIC':p.eic||'','FIC':p.fic||'','来源文件':c.sourceFile||'','合同ID':c.id};});
+    return list.map(c=>{const p=listProfile(c),keywords=p.keywords||[],guess=(!(p.services||[]).length||!(p.specificTags||[]).length)?ServiceContent.classifyKeywords(keywords):{domains:[],services:[]};
+      const domains=(p.services||[]).length?p.services:guess.domains,specific=(p.specificTags||[]).length?p.specificTags:guess.services.length?guess.services:keywords;
+      return {'项目名称':c.projectName||'','上传者ID':c.uploadedByName||myUploader(),'Engagement Name':c.engagementName||'','甲方':c.partyA||'','乙方':c.partyB||'','签约时间':c.signDate||'','原始关键词':keywords.join('；'),'服务领域':domains.join('；'),'具体服务':specific.join('；'),'系统':(p.systems||[]).join('；'),'PIC':p.pic||'','EIC':p.eic||'','合同ID':c.id};});
   }
-  function needDesktop(){if(NativeDocuments.available())return false;showToast('Excel 导出、导入和云盘合并需要在桌面版（ContractOCR.exe）中使用','warning');return true;}
+  function needDesktop(){if(NativeDocuments.available())return false;showToast('Excel 导出和云盘合并需要在桌面版（ContractOCR.exe）中使用','warning');return true;}
   async function excelPost(path,body,json=true){
     const response=await fetch(path,{method:'POST',headers:{...NativeDocuments.headers(),'Content-Type':json?'application/json':'application/octet-stream'},body:json?JSON.stringify(body):body});
     if(!response.ok){let message='本机服务请求失败';try{message=(await response.json()).error||message;}catch{}throw new Error(message);}
@@ -578,67 +567,65 @@ const App = (() => {
     return (await excelPost('/api/excel/cloud-search',criteria)).json();
   }
 
-  async function exportExcel(){
+  // 合同检索结果导出 Excel：勾选的（未勾选时为当前筛选后的全部）本机合同与他人上传合同。
+  async function exportResults(items){
     if(needDesktop())return;
-    const list=listFiltered(document.getElementById('searchInput').value.trim().toLowerCase());
-    if(!list.length){showToast('暂无合同可导出','warning');return;}
-    const button=document.getElementById('exportExcelBtn');button.disabled=true;
-    try{const blob=await (await excelPost('/api/excel/export',{rows:excelRows(list)})).blob();downloadFile(blob,`合同列表_${getDateStr()}.xlsx`);showToast(`已导出 ${list.length} 份合同到 Excel`,'success');}
+    const rows=items.map(item=>{if(item.type==='remote')return {...item.row};const c=contracts.find(x=>x.id===item.id);return c?excelRows([c])[0]:null;}).filter(Boolean);
+    if(!rows.length){showToast('没有可导出的结果','warning');return;}
+    try{const blob=await (await excelPost('/api/excel/export',{rows})).blob();downloadFile(blob,`合同检索结果_${getDateStr()}.xlsx`);showToast(`已导出 ${rows.length} 份合同到 Excel`,'success');}
     catch(error){showToast('导出失败：'+error.message,'error');}
-    finally{button.disabled=false;}
   }
-  const splitKeywords=text=>[...new Set(String(text||'').split(/[；;，,、\n]+/).map(x=>x.trim()).filter(Boolean))];
-  const sameKey=(c,row)=>[c.projectName,c.partyA,c.signDate].map(x=>String(x||'').trim().toLowerCase()).join('|')===[row['项目名称'],row['甲方'],row['签约时间']].map(x=>String(x||'').trim().toLowerCase()).join('|');
-  // 导入同格式表：按合同ID（没有ID时按项目名称+甲方+签约时间）更新已有合同；表里留空的单元格不覆盖已有内容；找不到的行新增为「表格导入」合同。
-  async function importExcel(file){
-    const {rows}=await (await excelPost('/api/excel/parse',file,false)).json();
-    let added=0,updated=0,unchanged=0;
-    for(const row of rows){
-      if(!String(row['项目名称']||'').trim()&&!String(row['合同ID']||'').trim())continue;
-      const current=contracts.find(c=>row['合同ID']&&c.id===row['合同ID'])||contracts.find(c=>sameKey(c,row));
-      if(current){
-        const p=VaultModel.project(current),next={...p},keywords=splitKeywords(row['原始关键词']);let changed=false;
-        if(row['项目名称']&&row['项目名称']!==p.name){next.name=row['项目名称'];changed=true;}
-        for(const [column,key] of [['PIC','pic'],['EIC','eic'],['FIC','fic']])if(row[column]&&row[column]!==(p[key]||'')){next[key]=row[column];changed=true;}
-        if(keywords.length&&keywords.join('；')!==(p.keywords||[]).join('；')){next.keywords=keywords;next.keywordsSelectionManual=true;changed=true;}
-        let record=changed?VaultModel.update(current,next):{...current};
-        for(const [column,key] of [['甲方','partyA'],['乙方','partyB'],['签约时间','signDate']])if(row[column]&&row[column]!==(current[key]||'')){record[key]=row[column];record.manualFieldsEditedAt=new Date().toISOString();changed=true;}
-        if(changed){await Storage.updateContract(record);updated++;}else unchanged++;
-      }else{
-        const keywords=splitKeywords(row['原始关键词']);
-        await Storage.addContract({id:row['合同ID']||Storage.generateId(),projectName:row['项目名称']||'',partyA:row['甲方']||'',partyB:row['乙方']||'',signDate:row['签约时间']||'',amount:null,content:'',deliverables:'',sourceFile:row['来源文件']||'',rawText:'',uploadCategory:'other',importedFromExcel:true,manualFieldsEditedAt:new Date().toISOString(),createdAt:Date.now(),
-          knowledgeProfile:{name:row['项目名称']||'',pic:row['PIC']||'',eic:row['EIC']||'',fic:row['FIC']||'',keywords,keywordsSelectionManual:true,tagSchemaVersion:3}});
-        added++;
-      }
-    }
-    await loadContracts();updateStorageInfo();
-    return {added,updated,unchanged};
-  }
-  async function cloudMerge(){
+  // 合并到云盘总表：当前「我的合同」列表（含筛选）直接合并到系统设置中的总表，「上传者ID」由本机服务填写。
+  function cloudMerge(){
     if(needDesktop())return;
-    if(!contracts.length){showToast('暂无合同可合并','warning');return;}
-    const button=document.getElementById('cloudMergeBtn');button.disabled=true;const label=button.textContent;button.textContent='正在合并…';
-    try{const result=await (await excelPost('/api/excel/cloud-merge',{rows:excelRows(contracts)})).json();showToast(`已合并到云盘总表：新增 ${result.added} 行，更新 ${result.updated} 行，总表共 ${result.total} 行（${result.path}）`,'success');}
-    catch(error){showToast('合并失败：'+error.message,'error');if(/设置/.test(error.message))switchView('settings');}
-    finally{button.disabled=false;button.textContent=label;}
+    const list=listFiltered();
+    if(!list.length){showToast('暂无合同可合并','warning');return;}
+    showConfirm(`将 ${list.length} 份合同合并到云盘总表（按合同ID更新或追加，合并前自动备份）？`, async()=>{
+      const button=document.getElementById('cloudMergeBtn');button.disabled=true;const label=button.textContent;button.textContent='正在合并…';
+      try{const result=await (await excelPost('/api/excel/cloud-merge',{rows:excelRows(list)})).json();showToast(`已合并到云盘总表：新增 ${result.added} 行，更新 ${result.updated} 行，总表共 ${result.total} 行（${result.path}）`,'success');}
+      catch(error){showToast('合并失败：'+error.message,'error');if(/设置/.test(error.message))switchView('settings');}
+      finally{button.disabled=false;button.textContent=label;}
+    });
+  }
+  async function saveUploader(){
+    if(needDesktop())return;
+    const name=document.getElementById('cfgUploader').value.trim(),state=document.getElementById('uploaderState');
+    try{await NativeDocuments.request('/api/config',{method:'POST',headers:{...NativeDocuments.headers(),'Content-Type':'application/json'},body:JSON.stringify({key:'uploader',value:{name}})});await loadUploader();state.textContent='✓ 已保存';showToast('上传者ID已保存：'+myUploader(),'success');}
+    catch(error){state.textContent='';showToast('保存失败：'+error.message,'error');}
+  }
+  async function loadUploader(){
+    if(!NativeDocuments.available())return;
+    const cfg=await NativeDocuments.request('/api/config');
+    uploaderSelf=((cfg.uploader||{}).name||'').trim()||cfg.uploaderDefault||'';
+    const input=document.getElementById('cfgUploader');input.value=((cfg.uploader||{}).name||'');input.placeholder='留空使用本机账户名：'+(cfg.uploaderDefault||'');
+    renderTable();
   }
 
-  function renderTable(filter = '') {
+  const ICON_VIEW='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+  const ICON_EDIT='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+  const ICON_DELETE='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+  function deleteContract(id){
+    showConfirm('确定删除该合同记录？', async () => {
+      await Storage.deleteContract(id);
+      await loadContracts();
+      dropDeletedJobCards();
+      updateStorageInfo();
+      showToast('已删除', 'success');
+    });
+  }
+  function renderTable() {
     const tbody = document.getElementById('contractTableBody');
     if (contracts.length === 0) {
-      tbody.innerHTML = `<tr class="empty-row"><td colspan="9">暂无合同数据，请先上传PDF文件</td></tr>`;
+      tbody.innerHTML = `<tr class="empty-row"><td colspan="8">暂无合同数据，请先上传PDF文件</td></tr>`;
       return;
     }
-
-    const filtered = listFiltered(filter);
-
+    const filtered = listFiltered();
     if (filtered.length === 0) {
-      tbody.innerHTML = `<tr class="empty-row"><td colspan="9">没有匹配的合同</td></tr>`;
+      tbody.innerHTML = `<tr class="empty-row"><td colspan="8">没有匹配的合同</td></tr>`;
       return;
     }
-
     tbody.innerHTML = filtered.map(c => `
-      <tr data-id="${c.id}">
+      <tr data-id="${escapeHtml(c.id)}">
         <td>
           <div class="project-name" title="${escapeHtml(c.projectName || '未识别')}">${escapeHtml(c.projectName || '未识别项目')}</div>
         </td>
@@ -648,37 +635,21 @@ const App = (() => {
         ${listColumns(c)}
         <td>
           <div class="row-actions">
-            <button class="row-action-btn" data-action="view" title="查看详情">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-            </button>
-            <button class="row-action-btn" data-action="edit" title="编辑">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-            </button>
-            <button class="row-action-btn danger" data-action="delete" title="删除">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-            </button>
+            <button class="row-action-btn" data-action="view" title="查看详情">${ICON_VIEW}</button>
+            <button class="row-action-btn" data-action="edit" title="编辑合同信息、关键词、系统与标签">${ICON_EDIT}</button>
+            <button class="row-action-btn danger" data-action="delete" title="删除">${ICON_DELETE}</button>
           </div>
         </td>
-      </tr>
-    `).join('');
+      </tr>`).join('');
 
     // 绑定行操作
     tbody.querySelectorAll('button[data-action]').forEach(btn => {
       btn.addEventListener('click', e => {
         e.stopPropagation();
-        const id = btn.closest('tr').dataset.id;
-        const action = btn.dataset.action;
+        const id = btn.closest('tr').dataset.id, action = btn.dataset.action;
         if (action === 'view') openDetailModal(id);
-        else if (action === 'edit') openEditModal(id);
-        else if (action === 'delete') {
-          showConfirm('确定删除该合同记录？', async () => {
-            await Storage.deleteContract(id);
-            await loadContracts();
-            dropDeletedJobCards();
-            updateStorageInfo();
-            showToast('已删除', 'success');
-          });
-        }
+        else if (action === 'edit') Vault.openEditor(id);
+        else if (action === 'delete') deleteContract(id);
       });
     });
 
@@ -689,58 +660,6 @@ const App = (() => {
         if (id) openDetailModal(id);
       });
     });
-  }
-
-  // ============== 编辑模态框 ==============
-  function openEditModal(id) {
-    const contract = contracts.find(c => c.id === id);
-    if (!contract) return;
-    currentEditingId = id;
-
-    document.getElementById('edit_projectName').value = contract.projectName || '';
-    document.getElementById('edit_partyA').value = contract.partyA || '';
-    document.getElementById('edit_partyB').value = contract.partyB || '';
-    document.getElementById('edit_signDate').value = contract.signDate || '';
-    document.getElementById('edit_amount').value = contract.amount || '';
-    document.getElementById('edit_content').value = contract.content || '';
-    document.getElementById('edit_deliverables').value = contract.deliverables || '';
-    document.getElementById('edit_auditPurpose').value = contract.auditPurpose || '';
-    document.getElementById('edit_auditPurposeReviewed').checked = false;
-
-    document.getElementById('editModal').hidden = false;
-  }
-
-  async function saveEdit() {
-    if (!currentEditingId) return;
-    const existing = contracts.find(c => c.id === currentEditingId);
-    if (!existing) return;
-    const contract = { ...existing };
-
-    const projectName = document.getElementById('edit_projectName').value.trim();
-    if (!projectName) {
-      showToast('项目名称不能为空', 'warning');
-      return;
-    }
-
-    contract.manualFieldsEditedAt=Date.now();
-    contract.projectName = projectName;
-    contract.partyA = document.getElementById('edit_partyA').value.trim();
-    contract.partyB = document.getElementById('edit_partyB').value.trim();
-    contract.signDate = document.getElementById('edit_signDate').value;
-    contract.amount = parseFloat(document.getElementById('edit_amount').value) || 0;
-    contract.content = document.getElementById('edit_content').value.trim();
-    contract.deliverables = document.getElementById('edit_deliverables').value.trim();
-    contract.auditPurpose = document.getElementById('edit_auditPurpose').value.trim();
-    if (contract.auditPurpose !== (existing.auditPurpose || '') || document.getElementById('edit_auditPurposeReviewed').checked) {
-      contract.auditPurposeNeedsReview = false;
-      contract.auditPurposeEditedAt = Date.now();
-    }
-
-    await Storage.updateContract(VaultModel.synchronizeEdit(existing,contract));
-    await loadContracts();
-    updateStorageInfo();
-    closeModals();
-    showToast('已保存修改', 'success');
   }
 
   // Short, traceable excerpts; retain the original OCR text for corrections.
@@ -803,13 +722,6 @@ const App = (() => {
       document.getElementById('locatedEvidence').scrollIntoView({ block: 'center', behavior: 'smooth' });
     });
   }
-  function renderBusinessCategories() {
-    const box = document.getElementById('businessIntentResults');
-    if (!box) return;
-    box.innerHTML = '<h3>业务内容归类</h3><p>按合同展示业务分类，可展开依据、编辑分类及添加笔记。</p>' +
-      (contracts.length ? contracts.map(contract => `<details class="audit-review-item"><summary>${escapeHtml(contract.sourceFile || contract.projectName || '合同')}</summary>${businessTagsHtml(contract)}</details>`).join('') : '<p>请先上传合同。</p>');
-    bindBusinessActions(box);
-  }
   function pageAuditRows(contract) {
     if (contract.pageAudit?.length) return contract.pageAudit;
     return (contract.layoutPages || []).map((page, index) => ({page:index+1, characters:(page.lines || []).reduce((n,l)=>n+String(l.text || '').replace(/\s/g,'').length,0), lines:(page.lines || []).length, lowScoreLines:null, state:'原页图像未检查', retried:false}));
@@ -826,34 +738,31 @@ const App = (() => {
   function renderServiceProfile(contract){
     if(AnalysisResults.managed(contract)&&!AnalysisResults.ready(contract))return '';
     const content=AnalysisResults.get(contract,'content',()=>ServiceContent.analyze(ContractScope.textFor(contract)));
-    const labels=key=>[...new Set(content[key].map(item=>item.label))];
+    // 服务领域只显示合同中实际识别到的（与「业务关键词与标签」一致），不列出全部候选领域
+    const labels=key=>[...new Set((key==='domains'?content.serviceDomains||[]:content[key]).map(item=>item.label))];
     const groups=[['goals','客户目标'],['services','实际服务活动'],['domains','服务领域'],['standards','标准与框架'],['training','培训内容'],['topics','相关控制与隐私主题'],['personnel','人员资质与经验'],['commercial','商务与数据使用约定'],['boundaries','服务边界'],['deliverables','交付成果']];
     return `<div class="service-profile"><h4>服务内容画像</h4><p>涉及系统：${escapeHtml(labels('systems').join('、')||'未提及')} · 客户行业：${escapeHtml(labels('industry').join('、')||'未提及')}</p>${groups.filter(([key])=>key!=='commercial').map(([key,label])=>{const values=labels(key);return key==='services'?`<p><strong>${label}：</strong>${values.length?values.map(value=>`<span class="service-topic">${escapeHtml(value)}</span>`).join(''):'未提取'}</p>`:values.length?`<details><summary>${label}（${values.length}）</summary><div class="profile-items">${content[key].filter((item,index,all)=>all.findIndex(x=>x.label===item.label)===index).map(item=>`<p><strong>${escapeHtml(item.label)}${item.status?' · '+escapeHtml(item.status):''}</strong></p>${String(item.label).replace(/\s/g,'')===String(item.evidence).replace(/\s/g,'')?'':`<p class="profile-evidence">${escapeHtml(DocumentView.readable(item.evidence))}</p>`}`).join('')}</div></details>`:'';}).join('')}</div>`;
   }
   function renderAuditReview(contract) {
     const fields = AuditReview.forContract(contract).filter(field => field.key !== 'purpose');
-    return `<div class="detail-section audit-review" id="classificationReviewSection"><h4>业务内容归类</h4>${typeof NativeDocuments !== 'undefined' && NativeDocuments.available() ? '<button class="btn btn-ghost btn-sm" id="reanalyseBusiness" type="button">重新分析业务含义</button>' : ''}<div class="classification-tree">${businessTagsHtml(contract, true)}</div>
-      <div class="contract-notes"><label for="contractReviewNotes">合同笔记</label><textarea id="contractReviewNotes" rows="4" placeholder="记录合同要点和工作笔记。">${escapeHtml(contract.reviewerNotes || '')}</textarea><p>笔记单独保存，不参与识别。</p><button class="btn btn-primary btn-sm" type="button" id="saveBusinessReview">保存摘要、分类与笔记</button><span id="businessReviewSaveState" role="status"></span></div>
+    return `<div class="detail-section audit-review" id="classificationReviewSection"><h4>合同笔记</h4>
+      <div class="contract-notes"><label for="contractReviewNotes">合同笔记</label><textarea id="contractReviewNotes" rows="4" placeholder="记录合同要点和工作笔记。">${escapeHtml(contract.reviewerNotes || '')}</textarea><p>笔记单独保存，不参与识别。</p><button class="btn btn-primary btn-sm" type="button" id="saveBusinessReview">保存摘要与笔记</button><span id="businessReviewSaveState" role="status"></span></div>
       <h4>合同条款</h4><div class="clause-tree">${fields.map(field => `<details class="audit-review-item"><summary>${escapeHtml(field.label)}</summary><div class="clause-body"><p>${escapeHtml(field.question)}</p>${field.evidence.length ? field.evidence.map(e => `<blockquote>${DocumentView.paragraphs(e.text)}</blockquote><button class="btn btn-ghost btn-sm" type="button" data-evidence-contract="${escapeHtml(contract.id)}" data-offset="${e.start}" data-length="${e.end-e.start}">定位到识别全文</button>`).join('') : '<p>无对应条款</p>'}</div></details>`).join('')}</div>
     </div>`;
   }
 
   function renderBusinessKeywordTags(contract) {
-    if(AnalysisResults.managed(contract)&&!AnalysisResults.ready(contract))return '<div id="businessKeywordTags" class="detail-section business-keyword-tags"><h4>业务关键词与标签</h4><p>业务分析中，识别全文已可查看。</p><button type="button" id="editContractTags" hidden>编辑 Tag</button></div>';
-    const profile=VaultModel.project(contract),facts=AnalysisResults.get(contract,'facts',()=>ContractFacts.analyze(ContractScope.textFor(contract))),raw=contract.rawText||'';
+    if(AnalysisResults.managed(contract)&&!AnalysisResults.ready(contract))return '<div id="businessKeywordTags" class="detail-section business-keyword-tags"><h4>业务关键词与标签</h4><p>业务分析中，识别全文已可查看。</p><button type="button" id="editContractTags" hidden>编辑合同信息</button></div>';
+    const profile=VaultModel.project(contract),raw=contract.rawText||'';
     const evidence=(items,value)=>items.find(item=>item.label===value)?.evidence||'';
     const row=(key,label,values,find)=>({key,label,items:[...new Set(values.filter(Boolean))].map(value=>({value,evidence:find(value)}))});
     const groups=[
       row('domains','服务领域',profile.services,v=>evidence(profile.analysis.serviceDomains,v)),
       row('specific','具体服务',profile.specificTags,v=>evidence(profile.analysis.services,v)),
-      row('industry','客户行业',[profile.industry.filter(Boolean).join(' › ')],()=>profile.industry.filter(Boolean).join('/')===facts.industry.join('/')?facts.evidence.industry||'':''),
-      row('enterprise','企业特征',[profile.enterpriseSize&&'规模：'+profile.enterpriseSize,profile.businessModel&&'模式：'+profile.businessModel],v=>v==='规模：'+facts.enterpriseSize?facts.evidence.enterpriseSize||'':v==='模式：'+facts.businessModel?facts.evidence.businessModel||'':''),
-      row('needs','客户诉求',profile.needTags||[],v=>facts.evidence['need:'+v]||''),
       row('systems','系统 / 技术',profile.systems,v=>evidence(profile.analysis.systems,v))
     ];
-    if(profile.customTags.length)groups.push(row('custom','自定义标签',profile.customTags,()=>''));
     const count=groups.reduce((sum,g)=>sum+g.items.length,0);
-    const scope=ContractScope.resolve(contract);return `<div class="analysis-scope-note ${scope.status==='missing'||scope.status==='empty'?'missing':''}">${escapeHtml((ContractScope.category(contract)==='ey-template'?'安永模板类 · ':'其他类合同 · ')+scope.label)}</div><div class="detail-section business-keyword-tags" id="businessKeywordTags"><h4 class="summary-heading">业务关键词与标签（${count} 个）<button class="btn btn-ghost btn-sm" type="button" id="editContractTags">编辑 Tag</button></h4><div class="business-tag-groups">${groups.map(g=>`<div class="business-tag-row tags-${g.key}" data-business-tag-group="${g.key}"><span class="business-tag-label">${g.label}</span><div class="list-kws">${g.items.length?g.items.map(item=>{const start=item.evidence?ContractScope.offsetOf(contract,item.evidence):-1;return start>=0?`<button type="button" class="kw-chip business-tag-chip" data-evidence-contract="${escapeHtml(contract.id)}" data-offset="${start}" data-length="${item.evidence.length}" title="${escapeHtml('定位到原文：'+item.evidence)}">${escapeHtml(item.value)}</button>`:`<span class="kw-chip business-tag-chip" title="人工补充，可在标签管理编辑">${escapeHtml(item.value)}</span>`;}).join(''):'<span class="list-kw-empty">—</span>'}</div></div>`).join('')}</div></div>`;
+    const scope=ContractScope.resolve(contract);return `<div class="analysis-scope-note ${scope.status==='missing'||scope.status==='empty'?'missing':''}">${escapeHtml((ContractScope.category(contract)==='ey-template'?'安永模板类 · ':'')+scope.label)}</div><div class="detail-section business-keyword-tags" id="businessKeywordTags"><h4 class="summary-heading">业务关键词与标签（${count} 个）<button class="btn btn-ghost btn-sm" type="button" id="editContractTags">编辑合同信息</button></h4><div class="business-tag-groups">${groups.map(g=>`<div class="business-tag-row tags-${g.key}" data-business-tag-group="${g.key}"><span class="business-tag-label">${g.label}</span><div class="list-kws">${g.items.length?g.items.map(item=>{const start=item.evidence?ContractScope.offsetOf(contract,item.evidence):-1;return start>=0?`<button type="button" class="kw-chip business-tag-chip" data-evidence-contract="${escapeHtml(contract.id)}" data-offset="${start}" data-length="${item.evidence.length}" title="${escapeHtml('定位到原文：'+item.evidence)}">${escapeHtml(item.value)}</button>`:`<span class="kw-chip business-tag-chip" title="人工补充，可在标签管理编辑">${escapeHtml(item.value)}</span>`;}).join(''):'<span class="list-kw-empty">—</span>'}</div></div>`).join('')}</div></div>`;
   }
 
   // ============== 详情模态框 ==============
@@ -874,10 +783,6 @@ const App = (() => {
           <div class="detail-item">
             <div class="detail-label">项目名称</div>
             <div class="detail-value">${escapeHtml(contract.projectName || '未识别')}</div>
-          </div>
-          <div class="detail-item">
-            <div class="detail-label">签约金额</div>
-            <div class="detail-value amount">${contract.amount > 0 ? formatMoney(contract.amount) : '未识别'}</div>
           </div>
         </div>
       </div>
@@ -959,7 +864,7 @@ const App = (() => {
         }else{openDetailModal(contract.id);showToast('已根据保存的文字更新业务分析','success');}
       }catch(error){showToast(error.message,'error');}finally{button.disabled=false;}
     });
-    document.getElementById('editContractTags').onclick=()=>{if(!closeModals())return;if(switchView('vault-manage'))Vault.selectContract(id);};
+    document.getElementById('editContractTags').onclick=()=>{if(!closeModals())return;Vault.openEditor(id);};
     const initialSummary = AuditReview.summaryFor(contract).text;
     const readReview = () => ({
       businessReview: { ...contract.businessReview, ...Object.fromEntries([...body.querySelectorAll('[data-review-code]')].map(row => [row.dataset.reviewCode, {
@@ -1003,7 +908,7 @@ const App = (() => {
         document.getElementById('serviceSummaryPreview').innerHTML = DocumentView.paragraphs(AuditReview.summaryFor(updated).text);
         document.getElementById('serviceSummaryPreview').hidden = false;
         document.getElementById('serviceSummaryPanel').hidden = true;
-        renderBusinessCategories(); KeywordPool.render(contracts, selectedId => openDetailModal(selectedId)); updateStorageInfo();
+        updateStorageInfo();
       } catch (error) { showToast('保存失败，笔记仍保留在编辑框：' + error.message, 'error'); }
       finally { draft.saving = false; button.disabled = false; }
     };
@@ -1100,11 +1005,7 @@ const App = (() => {
       }
       fullTextDraft = null;
       openDetailModal(id, true);
-      renderTable(document.getElementById('searchInput').value.trim().toLowerCase());
-      if (document.getElementById('view-keywords').classList.contains('active')) {
-        renderBusinessCategories();
-        KeywordPool.render(contracts, selectedId => openDetailModal(selectedId));
-      }
+      refreshVisibleVault();renderTable();
       updateStorageInfo();
       showToast('全文已保存，业务关键词与标签已更新', 'success');
     };
@@ -1167,7 +1068,6 @@ const App = (() => {
     }
     reviewDraft = null;
     DocumentView.release();
-    document.getElementById('editModal').hidden = true;
     document.getElementById('detailModal').hidden = true;
     currentEditingId = null;
     return true;
@@ -1299,20 +1199,18 @@ const App = (() => {
 
   // ============== 配置管理 ==============
   async function loadConfigToUI() {
-    const controls=['cfgPartyA','cfgPartyB','cfgAmount','cfgWorkers','saveCfgBtn'].map(id=>document.getElementById(id));
+    const controls=['cfgWorkers','saveCfgBtn','cfgCloudExcel','saveCloudExcelBtn','cfgUploader','saveUploaderBtn'].map(id=>document.getElementById(id));
     controls.forEach(control=>control.disabled=true);
     try {
       const cfg=await Storage.getConfig();
-      document.getElementById('cfgPartyA').value=cfg.partyAKeys;
-      document.getElementById('cfgPartyB').value=cfg.partyBKeys;
-      document.getElementById('cfgAmount').value=cfg.amountKeys;
       document.getElementById('cfgWorkers').value=cfg.nativeWorkers||'auto';
       if(NativeDocuments.available()){
         const health=await NativeDocuments.request('/api/health');
         const m=health.machine||{};document.getElementById('nativeWorkerState').textContent='当前本机并发：'+health.workers+' 个进程 × '+(health.threads||'?')+' 线程；本机 '+(m.cpu||'CPU')+' · '+(m.logicalProcessors||'?')+' 个逻辑处理器'+(m.memoryGB?' · 内存 '+m.memoryGB+'GB（可用 '+m.availableGB+'GB）':'')+'；修改并发后需重启EXE。';
       }
       document.getElementById('exportBackupBtn').hidden=!NativeDocuments.available();
-      if(NativeDocuments.available())document.getElementById('cfgCloudExcel').value=((await NativeDocuments.request('/api/config')).cloudExcel||{}).path||'';
+      if(NativeDocuments.available()){const config=await NativeDocuments.request('/api/config');document.getElementById('cfgCloudExcel').value=(config.cloudExcel||{}).path||config.cloudExcelDefault||'';}
+      await loadUploader();
     }catch(error){showToast('配置加载失败：'+error.message,'error');}
     finally{controls.forEach(control=>control.disabled=false);}
   }
@@ -1320,10 +1218,7 @@ const App = (() => {
   async function saveConfig() {
     const button=document.getElementById('saveCfgBtn');button.disabled=true;
     try {
-      const values={partyAKeys:document.getElementById('cfgPartyA').value.trim()||Storage.getDefaultConfig().partyAKeys,
-        partyBKeys:document.getElementById('cfgPartyB').value.trim()||Storage.getDefaultConfig().partyBKeys,
-        amountKeys:document.getElementById('cfgAmount').value.trim()||Storage.getDefaultConfig().amountKeys,
-        nativeWorkers:document.getElementById('cfgWorkers').value};
+      const values={nativeWorkers:document.getElementById('cfgWorkers').value};
       const cfg={...await Storage.getConfig(),...values};
       await Storage.saveConfig(cfg);
       showToast('已保存配置；并发修改在重启EXE后生效','success');
