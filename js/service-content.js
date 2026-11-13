@@ -219,5 +219,12 @@ const ServiceContent=(()=>{
  function normalizeSystem(value){const t=String(value||'').trim();if(/^oracle$/i.test(t))return 'Oracle';return /^(?:sap|erp|dms|crm|rpa)$/i.test(t)?t.toUpperCase():t;}
  function evidenceUnits(source){return units(source).filter(u=>!['personnel','training','training_service','commercial','definition','boundary','goal','background','example'].includes(u.role));}
  function supportsEvidence(source,evidence){const at=source.indexOf(evidence);if(at<0)return false;return evidenceUnits(source).some(u=>u.start<at+evidence.length&&u.start+u.text.length>at);}
- return {analyze,units,evidenceUnits,supportsEvidence,cleanTag,domainFor,domainNames,canonicalDomain,isDomain,registerDomain,normalizeSystem};
+ // 只有关键词时（他人上传的旧总表行、没有分类结果的合同）按同一规则归类出服务领域与具体服务。
+ function classifyKeywords(keywords){
+  const list=[...new Set((keywords||[]).map(x=>String(x).trim()).filter(Boolean))];
+  if(!list.length)return {domains:[],services:[]};
+  const r=analyze('服务内容：'+list.join('；')+'。');
+  return {domains:[...new Set(r.serviceDomains.map(x=>x.label))],services:[...new Set(r.services.map(x=>x.label))]};
+ }
+ return {classifyKeywords,analyze,units,evidenceUnits,supportsEvidence,cleanTag,domainFor,domainNames,canonicalDomain,isDomain,registerDomain,normalizeSystem};
 })();

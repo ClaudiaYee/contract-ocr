@@ -17,12 +17,15 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 from xml.sax.saxutils import escape
 
-COLUMNS = ['项目名称', '上传者ID', 'Engagement Code', 'Engagement Code Description', 'Engagement Name', '甲方', '乙方', '签约时间', '原始关键词', '服务领域', '具体服务', '系统', 'PIC', 'EIC', 'FIC', '来源文件', '合同ID']
+COLUMNS = ['项目名称', '上传者ID', 'Engagement Name', '甲方', '乙方', '签约时间', '原始关键词', '服务领域', '具体服务', '系统', 'PIC', 'EIC', '合同ID']
+# 不再写入共享总表的列：Engagement Code / Description 与甲方名结合、来源文件名都可能透露客户未公开事项（如 IPO）；
+# FIC 不再使用。合并时从已有总表（含备份）中一并删除。
+REMOVED_COLUMNS = {'Engagement Code', 'Engagement Code Description', '来源文件', 'FIC'}
 ID_COLUMN = '合同ID'
 SYNC_COLUMN = '同步时间'
 SHEET_NAME = '合同列表'
 MASTER_NAME = '合同识别总表.xlsx'
-WIDTHS = {'项目名称': 42, '服务领域': 24, '具体服务': 36, '系统': 20, '上传者ID': 18, 'Engagement Code': 18, 'Engagement Code Description': 36, 'Engagement Name': 32, '甲方': 28, '乙方': 28, '签约时间': 13, '原始关键词': 48, 'PIC': 12, 'EIC': 12, 'FIC': 12, '来源文件': 30, '合同ID': 30, '同步时间': 20}
+WIDTHS = {'项目名称': 42, '服务领域': 24, '具体服务': 36, '系统': 20, '上传者ID': 18, 'Engagement Name': 32, '甲方': 28, '乙方': 28, '签约时间': 13, '原始关键词': 48, 'PIC': 12, 'EIC': 12, '合同ID': 30, '同步时间': 20}
 NS = {'m': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
 REL_NS = '{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id'
 _ILLEGAL = re.compile('[\x00-\x08\x0b\x0c\x0e-\x1f]')
@@ -183,8 +186,8 @@ def merge_rows(headers: list[str], existing: list[dict], incoming: list[dict], s
 
     Hand-added columns in the existing table are kept; a blank incoming cell does not erase a filled one.
     """
-    merged_headers = list(COLUMNS) + [h for h in headers if h not in COLUMNS and h != SYNC_COLUMN] + [SYNC_COLUMN]
-    rows = [dict(r) for r in existing]
+    merged_headers = list(COLUMNS) + [h for h in headers if h not in COLUMNS and h not in REMOVED_COLUMNS and h != SYNC_COLUMN] + [SYNC_COLUMN]
+    rows = [{h: v for h, v in r.items() if h not in REMOVED_COLUMNS} for r in existing]
     index = {row_key(r): i for i, r in enumerate(rows)}
     added = updated = 0
     for row in incoming:
@@ -267,13 +270,13 @@ def search_master(configured: str, query: str, people: dict, eligible_ids: set |
                for role in ('PIC', 'EIC')):
             continue
         person = normalize(people.get('person', ''))
-        if person and not any(person in normalize(public_row[role]) for role in ('PIC', 'EIC', 'FIC')):
+        if person and not any(person in normalize(public_row[role]) for role in ('PIC', 'EIC', '上传者ID')):
             continue
         fields = [normalize(value) for value in public_row.values()]
         direct = identifier in direct_ids or (bool(terms) and combine(any(term in field for field in fields) for term in terms))
         if direct or identifier in related_ids:
             total += 1
-            if len(matches) < 100:
+            if len(matches) < 500:
                 matches.append({'row': public_row, 'kind': 'direct' if direct else 'related'})
     return {'rows': matches, 'total': total}
 
@@ -288,7 +291,9 @@ def merge_into_master(configured: str, incoming: list[dict]) -> dict:
             raise ExcelError('总表正被占用（可能在 Excel 中打开），请关闭后重试')
         backup = path.with_name(path.stem + '.备份.xlsx')
         try:
-            shutil.copy2(path, backup)
+            # 备份同样去掉已停用的敏感列
+            kept = [h for h in headers if h not in REMOVED_COLUMNS]
+            backup.write_bytes(write_xlsx(kept, [{h: r.get(h, '') for h in kept} for r in existing]))
         except OSError:
             raise ExcelError('无法备份总表，请检查文件夹权限或关闭正在打开的总表')
     stamp = _dt.datetime.now().strftime('%Y-%m-%d %H:%M')

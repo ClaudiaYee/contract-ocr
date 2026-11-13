@@ -710,8 +710,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             if not isinstance(rows, list) or not all(isinstance(row, dict) for row in rows):
                 return self.respond(400, {'error': '表格数据格式不正确'})
             # 上传者ID comes from this computer's contract records, never from the browser or an edited Excel row.
+            # 导出检索结果时，他人上传（不在本机）的行保留总表中的上传者ID。
             for row in rows:
                 contract = get_record('contracts', row.get('合同ID')) if isinstance(row.get('合同ID'), str) and row.get('合同ID') else None
+                if contract is None and path == '/api/excel/export' and isinstance(row.get('上传者ID'), str) and row.get('上传者ID').strip():
+                    continue
                 row['上传者ID'] = (contract or {}).get('uploadedByName') or uploader_name()
             if path == '/api/excel/export':
                 body = excel_table.write_xlsx(excel_table.COLUMNS, rows)

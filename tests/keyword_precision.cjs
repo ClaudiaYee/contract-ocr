@@ -47,4 +47,6 @@ assert(!M.project(old).keywords.includes('的培训'));
 assert(M.project(old).systems.includes('手动系统'));
 const manual={...old,knowledgeProfile:{...old.knowledgeProfile,keywordsSelectionManual:true,keywords:['自定义词']}};
 assert(!M.project(manual).keywords.includes('自定义词'),'manual keywords are no longer kept');assert(M.project(manual).keywords.includes('差距分析'));
+// 4. 只有关键词（他人旧总表行）时自动归类服务领域 / 具体服务
+const guess=S.classifyKeywords(['SOC2类型二鉴证','SOC2报告','内部控制']);assert(guess.domains.includes('第三方鉴证'),guess.domains);assert(guess.services.includes('SOC 2鉴证'),guess.services);assert.deepEqual(Array.from(S.classifyKeywords([]).domains),[]);
 console.log('PASS keyword precision: item titles, standards, SOC labels, systems and refresh');

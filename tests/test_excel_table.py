@@ -15,7 +15,7 @@ class ExcelTableTest(unittest.TestCase):
         self.assertEqual(back[0]['项目名称'], 'A<&>"项目"')
         self.assertEqual(back[0]['甲方'], '甲')
         self.assertEqual(back[0]['原始关键词'], 'SOC2；内部控制')
-        self.assertEqual(back[0]['FIC'], '')
+        self.assertEqual(back[0]['EIC'], '')
 
     def test_reads_shared_strings_date_serials_and_title_rows(self):
         import io, zipfile
@@ -47,15 +47,15 @@ class ExcelTableTest(unittest.TestCase):
             e.read_xlsx(e.write_xlsx(['别的表'], [{'别的表': 'x'}]))
 
     def test_merge_updates_by_id_then_fields_keeps_extra_columns_and_filled_cells(self):
-        existing = [{'项目名称': 'A', '甲方': '甲', '签约时间': '2026-01-01', 'FIC': '旧', '合同ID': 'c1', '备注': '手填'},
+        existing = [{'项目名称': 'A', '甲方': '甲', '签约时间': '2026-01-01', 'EIC': '旧', '合同ID': 'c1', '备注': '手填'},
                     {'项目名称': 'B', '甲方': '乙', '签约时间': '2026-02-02', '合同ID': ''}]
-        incoming = [{'项目名称': 'A2', '合同ID': 'c1', 'FIC': ''},
+        incoming = [{'项目名称': 'A2', '合同ID': 'c1', 'EIC': ''},
                     {'项目名称': 'B', '甲方': '乙', '签约时间': '2026-02-02', '合同ID': 'c2', 'PIC': '王'},
                     {'项目名称': 'C', '合同ID': 'c3'}, {'合同ID': 'only-id'}]
         headers, rows, summary = e.merge_rows(e.COLUMNS + ['备注'], existing, incoming, 'now')
         self.assertEqual(summary, {'added': 1, 'updated': 2, 'total': 3})
         self.assertEqual(headers[-2:], ['备注', e.SYNC_COLUMN])
-        self.assertEqual((rows[0]['项目名称'], rows[0]['FIC'], rows[0]['备注']), ('A2', '旧', '手填'))
+        self.assertEqual((rows[0]['项目名称'], rows[0]['EIC'], rows[0]['备注']), ('A2', '旧', '手填'))
         self.assertEqual((rows[1]['PIC'], rows[1]['合同ID']), ('王', 'c2'))
         self.assertEqual(rows[2]['项目名称'], 'C')
 
@@ -99,6 +99,26 @@ class ExcelTableTest(unittest.TestCase):
             for query in ['SOC2', 'soc 2 鉴证', 'SSAE18', 'iso27001']:
                 self.assertEqual([row['row']['合同ID'] for row in e.search_master(folder, query, {}, None, set(), set())['rows']], ['s'], query)
 
+
+    def test_merge_drops_sensitive_columns_from_existing_master(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = e.master_path(folder)
+            old_headers = ['项目名称', 'Engagement Code', 'Engagement Code Description', '甲方', 'FIC', '来源文件', '合同ID', '备注']
+            path.write_bytes(e.write_xlsx(old_headers, [{'项目名称': '旧项目', 'Engagement Code': 'E-1', 'Engagement Code Description': '某公司上市', '甲方': '甲', 'FIC': '赵', '来源文件': '某公司IPO.pdf', '合同ID': 'old', '备注': '手填'}]))
+            e.merge_into_master(folder, [{'项目名称': '新项目', '合同ID': 'new', 'Engagement Code': 'E-2', '来源文件': 'x.pdf'}])
+            for target in (path, path.with_name(path.stem + '.备份.xlsx')):
+                headers, rows = e.read_xlsx(target.read_bytes())
+                for column in e.REMOVED_COLUMNS:
+                    self.assertNotIn(column, headers)
+                    self.assertTrue(all(column not in row for row in rows))
+                self.assertIn('备注', headers)
+            self.assertEqual(e.read_xlsx(path.read_bytes())[1][0]['备注'], '手填')
+
+    def test_search_filters_by_uploader(self):
+        with tempfile.TemporaryDirectory() as folder:
+            e.merge_into_master(folder, [{'项目名称': 'SOX 项目', '上传者ID': 'GV371QP', '合同ID': 'a'}, {'项目名称': 'SOX 二期', '上传者ID': 'DL864LN', '合同ID': 'b'}])
+            rows = e.search_master(folder, 'SOX', {'person': 'gv371'}, None, set(), set())['rows']
+            self.assertEqual([r['row']['合同ID'] for r in rows], ['a'])
 
 if __name__ == '__main__':
     unittest.main()

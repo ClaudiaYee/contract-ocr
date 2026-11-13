@@ -97,3 +97,13 @@
 #demo-searchPage .match-mode select{width:auto;padding:5px 32px 5px 10px;border:1px solid var(--border,#e2e8f0);border-radius:6px;background-color:var(--bg-card,#fff);font-size:13px}
 #demo-searchPage .list-kw.from-text{border-style:dashed}
 .vault-root .edit-tag.readonly{padding:5px 9px;font-size:12px;color:#595967;background:#f5f5f8}
+.result-filters{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin:0 0 12px}
+.result-filters label{display:flex;align-items:center;gap:6px;white-space:nowrap;font-size:12px;color:#5f5f6b}
+.result-filters select{min-width:120px;padding:5px 8px;border:1px solid #dcdce3;border-radius:6px;background:#fff;font-size:12px}
+.result-filters .result-selected{margin-left:auto;font-size:12px;color:#777783}
+.result-filters .primary{padding:7px 16px}
+.contract-table .check-col{width:34px;text-align:center}
+.contract-table .check-col input{width:15px;height:15px;cursor:pointer}
+.remote-tag-groups{margin-top:18px}
+.remote-tag-row{display:grid;grid-template-columns:84px 1fr;gap:10px;align-items:start;padding:8px 0;border-top:1px solid #f0f0f3}
+.remote-tag-row>span{font-size:12px;color:#8a8a95;padding-top:3px}

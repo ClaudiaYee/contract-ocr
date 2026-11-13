@@ -61,7 +61,7 @@ const App = (() => {
       stage('loadContracts');await loadContracts();
       stage('bindEvents');bindEvents();
       window.addEventListener('business-analysis-updated',async()=>{try{await loadContracts();watchAnalysis();const badge=document.getElementById('analysisState');if(badge&&!document.getElementById('detailModal').hidden&&!fullTextDraft&&!reviewDraft?.dirty()){const top=document.getElementById('detailBody').scrollTop;openDetailModal(badge.dataset.contractId);document.getElementById('detailBody').scrollTop=top;}}catch(e){console.warn(e.message);}});
-      Vault.init({searchCloud: searchCloudExcel, saved: loadContracts, toast: showToast, openDetail: id => openDetailModal(id), deleteContract});
+      Vault.init({searchCloud: searchCloudExcel, saved: loadContracts, toast: showToast, openDetail: id => openDetailModal(id), deleteContract, uploader: myUploader, exportResults});
       refreshVisibleVault();renderTable();
       stage('loadConfig');await loadConfigToUI();
       stage('recoverJobs');await recoverNativeJobs();
@@ -190,7 +190,6 @@ const App = (() => {
     });
 
     // 导出/导入
-    document.getElementById('exportBtn').addEventListener('click', exportJSON);
     document.getElementById('exportJsonBtn').addEventListener('click', exportJSON);
     document.getElementById('exportBackupBtn').addEventListener('click', exportCompleteBackup);
     document.getElementById('exportCsvBtn').addEventListener('click', exportCSV);
@@ -200,16 +199,7 @@ const App = (() => {
       document.getElementById('importFile').click();
     });
     document.getElementById('importFile').addEventListener('change', importData);
-    document.getElementById('exportExcelBtn').addEventListener('click', exportExcel);
     document.getElementById('cloudMergeBtn').addEventListener('click', cloudMerge);
-    document.getElementById('importExcelBtn').addEventListener('click', () => { if(!needDesktop())document.getElementById('importExcelFile').click(); });
-    document.getElementById('importExcelFile').addEventListener('change', async e => {
-      const file=e.target.files[0];e.target.value='';if(!file)return;
-      const button=document.getElementById('importExcelBtn');button.disabled=true;
-      try{const r=await importExcel(file);showToast(`Excel 已整合：新增 ${r.added} 份，更新 ${r.updated} 份，无变化 ${r.unchanged} 份`,'success');}
-      catch(error){showToast('导入失败：'+error.message,'error');}
-      finally{button.disabled=false;}
-    });
     document.getElementById('saveCloudExcelBtn').addEventListener('click', saveCloudExcel);
 
     // 设置 - 保存配置
@@ -538,7 +528,7 @@ const App = (() => {
   }
 
   // ============== 表格渲染 ==============
-  // 合同列表：原始关键词与 PIC / EIC / FIC 来自整理页同一份资料（VaultModel），按合同对象缓存。
+  // 合同列表：原始关键词与 PIC / EIC 来自整理页同一份资料（VaultModel），按合同对象缓存。
   const listProfiles=new WeakMap();
   function listProfile(c){
     let p=listProfiles.get(c);
@@ -551,17 +541,21 @@ const App = (() => {
   function listFiltered(){
     const filter=(document.getElementById('searchInput')?.value||'').trim().toLowerCase();
     if(!filter)return contracts;
-    return contracts.filter(c=>{const p=listProfile(c);return [c.projectName,c.partyA,c.partyB,c.content,c.deliverables,c.sourceFile,c.rawText,c.uploadedByName,c.engagementCode,c.engagementCodeDescription,c.engagementName,...(p.keywords||[]),...(p.systems||[]),p.pic,p.eic,p.fic].filter(Boolean).join(' ').toLowerCase().includes(filter);});
+    return contracts.filter(c=>{const p=listProfile(c);return [c.projectName,c.partyA,c.partyB,c.content,c.deliverables,c.sourceFile,c.rawText,c.uploadedByName,c.engagementName,...(p.keywords||[]),...(p.systems||[]),p.pic,p.eic].filter(Boolean).join(' ').toLowerCase().includes(filter);});
   }
   function listColumns(c){
     const p=listProfile(c),keywords=p.keywords||[],shown=keywords.slice(0,6);
     const chips=shown.length?shown.map(k=>`<span class="list-kw">${escapeHtml(k)}</span>`).join('')+(keywords.length>shown.length?`<span class="list-kw more">+${keywords.length-shown.length}</span>`:''):'<span class="list-kw-empty">-</span>';
-    return `<td class="kw-cell" title="${escapeHtml(keywords.join('；'))}"><div class="list-kws">${chips}</div></td>`+['pic','eic','fic'].map(k=>`<td class="person-cell">${escapeHtml(p[k]||'-')}</td>`).join('');
+    return `<td class="kw-cell" title="${escapeHtml(keywords.join('；'))}"><div class="list-kws">${chips}</div></td>`+['pic','eic'].map(k=>`<td class="person-cell">${escapeHtml(p[k]||'-')}</td>`).join('');
   }
+  // 云盘总表 / 导出的行：不含 Engagement Code、Code Description、来源文件、FIC（可能透露客户未公开事项）。
+  // 服务领域、具体服务为空时按原始关键词自动归类；具体服务仍归不出时填原始关键词，避免留空。
   function excelRows(list){
-    return list.map(c=>{const p=listProfile(c);return {'项目名称':c.projectName||'','上传者ID':c.uploadedByName||myUploader(),'Engagement Code':c.engagementCode||'','Engagement Code Description':c.engagementCodeDescription||'','Engagement Name':c.engagementName||'','甲方':c.partyA||'','乙方':c.partyB||'','签约时间':c.signDate||'','原始关键词':(p.keywords||[]).join('；'),'服务领域':(p.services||[]).join('；'),'具体服务':(p.specificTags||[]).join('；'),'系统':(p.systems||[]).join('；'),'PIC':p.pic||'','EIC':p.eic||'','FIC':p.fic||'','来源文件':c.sourceFile||'','合同ID':c.id};});
+    return list.map(c=>{const p=listProfile(c),keywords=p.keywords||[],guess=(!(p.services||[]).length||!(p.specificTags||[]).length)?ServiceContent.classifyKeywords(keywords):{domains:[],services:[]};
+      const domains=(p.services||[]).length?p.services:guess.domains,specific=(p.specificTags||[]).length?p.specificTags:guess.services.length?guess.services:keywords;
+      return {'项目名称':c.projectName||'','上传者ID':c.uploadedByName||myUploader(),'Engagement Name':c.engagementName||'','甲方':c.partyA||'','乙方':c.partyB||'','签约时间':c.signDate||'','原始关键词':keywords.join('；'),'服务领域':domains.join('；'),'具体服务':specific.join('；'),'系统':(p.systems||[]).join('；'),'PIC':p.pic||'','EIC':p.eic||'','合同ID':c.id};});
   }
-  function needDesktop(){if(NativeDocuments.available())return false;showToast('Excel 导出、导入和云盘合并需要在桌面版（ContractOCR.exe）中使用','warning');return true;}
+  function needDesktop(){if(NativeDocuments.available())return false;showToast('Excel 导出和云盘合并需要在桌面版（ContractOCR.exe）中使用','warning');return true;}
   async function excelPost(path,body,json=true){
     const response=await fetch(path,{method:'POST',headers:{...NativeDocuments.headers(),'Content-Type':json?'application/json':'application/octet-stream'},body:json?JSON.stringify(body):body});
     if(!response.ok){let message='本机服务请求失败';try{message=(await response.json()).error||message;}catch{}throw new Error(message);}
@@ -572,44 +566,13 @@ const App = (() => {
     return (await excelPost('/api/excel/cloud-search',criteria)).json();
   }
 
-  async function exportExcel(){
+  // 合同检索结果导出 Excel：勾选的（未勾选时为当前筛选后的全部）本机合同与他人上传合同。
+  async function exportResults(items){
     if(needDesktop())return;
-    const list=listFiltered();
-    if(!list.length){showToast('暂无合同可导出','warning');return;}
-    const button=document.getElementById('exportExcelBtn');button.disabled=true;
-    try{const blob=await (await excelPost('/api/excel/export',{rows:excelRows(list)})).blob();downloadFile(blob,`合同列表_${getDateStr()}.xlsx`);showToast(`已导出 ${list.length} 份合同到 Excel`,'success');}
+    const rows=items.map(item=>{if(item.type==='remote')return {...item.row};const c=contracts.find(x=>x.id===item.id);return c?excelRows([c])[0]:null;}).filter(Boolean);
+    if(!rows.length){showToast('没有可导出的结果','warning');return;}
+    try{const blob=await (await excelPost('/api/excel/export',{rows})).blob();downloadFile(blob,`合同检索结果_${getDateStr()}.xlsx`);showToast(`已导出 ${rows.length} 份合同到 Excel`,'success');}
     catch(error){showToast('导出失败：'+error.message,'error');}
-    finally{button.disabled=false;}
-  }
-  const splitKeywords=text=>[...new Set(String(text||'').split(/[；;，,、\n]+/).map(x=>x.trim()).filter(Boolean))];
-  const sameKey=(c,row)=>[c.projectName,c.partyA,c.signDate].map(x=>String(x||'').trim().toLowerCase()).join('|')===[row['项目名称'],row['甲方'],row['签约时间']].map(x=>String(x||'').trim().toLowerCase()).join('|');
-  // 导入同格式表：按合同ID（没有ID时按项目名称+甲方+签约时间）更新已有合同；表里留空的单元格不覆盖已有内容；找不到的行新增为「表格导入」合同。
-  const ENGAGEMENT_COLUMNS=[['Engagement Code','engagementCode'],['Engagement Code Description','engagementCodeDescription'],['Engagement Name','engagementName']];
-  async function importExcel(file){
-    const {rows}=await (await excelPost('/api/excel/parse',file,false)).json();
-    let added=0,updated=0,unchanged=0;
-    for(const row of rows){
-      if(!String(row['项目名称']||'').trim()&&!String(row['合同ID']||'').trim())continue;
-      const current=contracts.find(c=>row['合同ID']&&c.id===row['合同ID'])||contracts.find(c=>sameKey(c,row));
-      if(current){
-        const p=VaultModel.project(current),next={...p},keywords=splitKeywords(row['原始关键词']);let changed=false;
-        if(row['项目名称']&&row['项目名称']!==p.name){next.name=row['项目名称'];changed=true;}
-        for(const [column,key] of [['PIC','pic'],['EIC','eic'],['FIC','fic']])if(row[column]&&row[column]!==(p[key]||'')){next[key]=row[column];changed=true;}
-        // 已有合同的关键词只由自动识别产生，导入 Excel 不覆盖；没有正文的记录才使用表格中的关键词
-        if(!String(current.rawText||'').trim()&&keywords.length&&keywords.join('；')!==(p.keywords||[]).join('；')){next.keywords=keywords;changed=true;}
-        let record=changed?VaultModel.update(current,next):{...current};
-        for(const [column,key] of [['甲方','partyA'],['乙方','partyB'],['签约时间','signDate']])if(row[column]&&row[column]!==(current[key]||'')){record[key]=row[column];record.manualFieldsEditedAt=new Date().toISOString();changed=true;}
-        for(const [column,key] of ENGAGEMENT_COLUMNS)if(row[column]&&row[column]!==(current[key]||'')){record[key]=row[column];changed=true;}
-        if(changed){await Storage.updateContract(record);updated++;}else unchanged++;
-      }else{
-        const keywords=splitKeywords(row['原始关键词']);
-        await Storage.addContract({id:row['合同ID']||Storage.generateId(),projectName:row['项目名称']||'',partyA:row['甲方']||'',partyB:row['乙方']||'',signDate:row['签约时间']||'',...Object.fromEntries(ENGAGEMENT_COLUMNS.map(([column,key])=>[key,row[column]||''])),amount:null,content:'',deliverables:'',sourceFile:row['来源文件']||'',rawText:'',uploadCategory:'other',importedFromExcel:true,manualFieldsEditedAt:new Date().toISOString(),createdAt:Date.now(),
-          knowledgeProfile:{name:row['项目名称']||'',pic:row['PIC']||'',eic:row['EIC']||'',fic:row['FIC']||'',keywords,tagSchemaVersion:3}});
-        added++;
-      }
-    }
-    await loadContracts();updateStorageInfo();
-    return {added,updated,unchanged};
   }
   // 合并到云盘总表：当前「我的合同」列表（含筛选）直接合并到系统设置中的总表，「上传者ID」由本机服务填写。
   function cloudMerge(){
@@ -652,12 +615,12 @@ const App = (() => {
   function renderTable() {
     const tbody = document.getElementById('contractTableBody');
     if (contracts.length === 0) {
-      tbody.innerHTML = `<tr class="empty-row"><td colspan="9">暂无合同数据，请先上传PDF文件</td></tr>`;
+      tbody.innerHTML = `<tr class="empty-row"><td colspan="8">暂无合同数据，请先上传PDF文件</td></tr>`;
       return;
     }
     const filtered = listFiltered();
     if (filtered.length === 0) {
-      tbody.innerHTML = `<tr class="empty-row"><td colspan="9">没有匹配的合同</td></tr>`;
+      tbody.innerHTML = `<tr class="empty-row"><td colspan="8">没有匹配的合同</td></tr>`;
       return;
     }
     tbody.innerHTML = filtered.map(c => `
@@ -780,26 +743,22 @@ const App = (() => {
   }
   function renderAuditReview(contract) {
     const fields = AuditReview.forContract(contract).filter(field => field.key !== 'purpose');
-    return `<div class="detail-section audit-review" id="classificationReviewSection"><h4>业务内容归类</h4>${typeof NativeDocuments !== 'undefined' && NativeDocuments.available() ? '<button class="btn btn-ghost btn-sm" id="reanalyseBusiness" type="button">重新分析业务含义</button>' : ''}<div class="classification-tree">${businessTagsHtml(contract, true)}</div>
-      <div class="contract-notes"><label for="contractReviewNotes">合同笔记</label><textarea id="contractReviewNotes" rows="4" placeholder="记录合同要点和工作笔记。">${escapeHtml(contract.reviewerNotes || '')}</textarea><p>笔记单独保存，不参与识别。</p><button class="btn btn-primary btn-sm" type="button" id="saveBusinessReview">保存摘要、分类与笔记</button><span id="businessReviewSaveState" role="status"></span></div>
+    return `<div class="detail-section audit-review" id="classificationReviewSection"><h4>合同笔记</h4>
+      <div class="contract-notes"><label for="contractReviewNotes">合同笔记</label><textarea id="contractReviewNotes" rows="4" placeholder="记录合同要点和工作笔记。">${escapeHtml(contract.reviewerNotes || '')}</textarea><p>笔记单独保存，不参与识别。</p><button class="btn btn-primary btn-sm" type="button" id="saveBusinessReview">保存摘要与笔记</button><span id="businessReviewSaveState" role="status"></span></div>
       <h4>合同条款</h4><div class="clause-tree">${fields.map(field => `<details class="audit-review-item"><summary>${escapeHtml(field.label)}</summary><div class="clause-body"><p>${escapeHtml(field.question)}</p>${field.evidence.length ? field.evidence.map(e => `<blockquote>${DocumentView.paragraphs(e.text)}</blockquote><button class="btn btn-ghost btn-sm" type="button" data-evidence-contract="${escapeHtml(contract.id)}" data-offset="${e.start}" data-length="${e.end-e.start}">定位到识别全文</button>`).join('') : '<p>无对应条款</p>'}</div></details>`).join('')}</div>
     </div>`;
   }
 
   function renderBusinessKeywordTags(contract) {
     if(AnalysisResults.managed(contract)&&!AnalysisResults.ready(contract))return '<div id="businessKeywordTags" class="detail-section business-keyword-tags"><h4>业务关键词与标签</h4><p>业务分析中，识别全文已可查看。</p><button type="button" id="editContractTags" hidden>编辑合同信息</button></div>';
-    const profile=VaultModel.project(contract),facts=AnalysisResults.get(contract,'facts',()=>ContractFacts.analyze(ContractScope.textFor(contract))),raw=contract.rawText||'';
+    const profile=VaultModel.project(contract),raw=contract.rawText||'';
     const evidence=(items,value)=>items.find(item=>item.label===value)?.evidence||'';
     const row=(key,label,values,find)=>({key,label,items:[...new Set(values.filter(Boolean))].map(value=>({value,evidence:find(value)}))});
     const groups=[
       row('domains','服务领域',profile.services,v=>evidence(profile.analysis.serviceDomains,v)),
       row('specific','具体服务',profile.specificTags,v=>evidence(profile.analysis.services,v)),
-      row('industry','客户行业',[profile.industry.filter(Boolean).join(' › ')],()=>profile.industry.filter(Boolean).join('/')===facts.industry.join('/')?facts.evidence.industry||'':''),
-      row('enterprise','企业特征',[profile.enterpriseSize&&'规模：'+profile.enterpriseSize,profile.businessModel&&'模式：'+profile.businessModel],v=>v==='规模：'+facts.enterpriseSize?facts.evidence.enterpriseSize||'':v==='模式：'+facts.businessModel?facts.evidence.businessModel||'':''),
-      row('needs','客户诉求',profile.needTags||[],v=>facts.evidence['need:'+v]||''),
       row('systems','系统 / 技术',profile.systems,v=>evidence(profile.analysis.systems,v))
     ];
-    if(profile.customTags.length)groups.push(row('custom','自定义标签',profile.customTags,()=>''));
     const count=groups.reduce((sum,g)=>sum+g.items.length,0);
     const scope=ContractScope.resolve(contract);return `<div class="analysis-scope-note ${scope.status==='missing'||scope.status==='empty'?'missing':''}">${escapeHtml((ContractScope.category(contract)==='ey-template'?'安永模板类 · ':'')+scope.label)}</div><div class="detail-section business-keyword-tags" id="businessKeywordTags"><h4 class="summary-heading">业务关键词与标签（${count} 个）<button class="btn btn-ghost btn-sm" type="button" id="editContractTags">编辑合同信息</button></h4><div class="business-tag-groups">${groups.map(g=>`<div class="business-tag-row tags-${g.key}" data-business-tag-group="${g.key}"><span class="business-tag-label">${g.label}</span><div class="list-kws">${g.items.length?g.items.map(item=>{const start=item.evidence?ContractScope.offsetOf(contract,item.evidence):-1;return start>=0?`<button type="button" class="kw-chip business-tag-chip" data-evidence-contract="${escapeHtml(contract.id)}" data-offset="${start}" data-length="${item.evidence.length}" title="${escapeHtml('定位到原文：'+item.evidence)}">${escapeHtml(item.value)}</button>`:`<span class="kw-chip business-tag-chip" title="人工补充，可在标签管理编辑">${escapeHtml(item.value)}</span>`;}).join(''):'<span class="list-kw-empty">—</span>'}</div></div>`).join('')}</div></div>`;
   }
@@ -822,10 +781,6 @@ const App = (() => {
           <div class="detail-item">
             <div class="detail-label">项目名称</div>
             <div class="detail-value">${escapeHtml(contract.projectName || '未识别')}</div>
-          </div>
-          <div class="detail-item">
-            <div class="detail-label">签约金额</div>
-            <div class="detail-value amount">${contract.amount > 0 ? formatMoney(contract.amount) : '未识别'}</div>
           </div>
         </div>
       </div>
