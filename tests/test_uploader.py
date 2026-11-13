@@ -6,6 +6,7 @@ import sys
 import tempfile
 import threading
 import unittest
+import urllib.error
 import urllib.request
 from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'native'))
@@ -20,6 +21,7 @@ class UploaderTests(unittest.TestCase):
         desktop.DATA_ROOT = self.root / 'data'; desktop.DB_PATH = desktop.DATA_ROOT / 'state.sqlite3'
         desktop.initialize_store()
         self.default_cloud=desktop.DEFAULT_CLOUD_PATH;desktop.DEFAULT_CLOUD_PATH=''
+        self.edition=desktop.ASSISTANT;desktop.ASSISTANT=False  # 管理员版行为；小秘书版见 AssistantEditionTests
         self.server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), desktop.Handler)
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
         self.origin = f'http://127.0.0.1:{self.server.server_port}'
@@ -27,7 +29,7 @@ class UploaderTests(unittest.TestCase):
 
     def tearDown(self):
         self.server.shutdown(); self.server.server_close()
-        desktop.DATA_ROOT, desktop.DB_PATH = self.previous; desktop.DEFAULT_CLOUD_PATH=self.default_cloud; self.tmp.cleanup()
+        desktop.DATA_ROOT, desktop.DB_PATH = self.previous; desktop.DEFAULT_CLOUD_PATH=self.default_cloud; desktop.ASSISTANT=self.edition; self.tmp.cleanup()
 
     def post(self, path, payload):
         headers = {'Origin': self.origin, 'X-OCR-Token': desktop.TOKEN, 'Content-Type': 'application/json'}
@@ -75,6 +77,48 @@ class UploaderTests(unittest.TestCase):
         excel_table.merge_into_master(str(cloud), [{'项目名称': '他人合同', '上传者ID': '同事乙', '合同ID': 'remote-1'}])
         found = self.post('/api/excel/cloud-search', {'query': '他人合同', 'people': {}, 'directIds': [], 'relatedIds': []})
         self.assertEqual(found['rows'][0]['row']['上传者ID'], '同事乙')
+
+
+class AssistantEditionTests(UploaderTests):
+    """小秘书版：云盘路径固定为内置路径，不返回给页面、不能修改，提示中不出现路径。"""
+    def setUp(self):
+        super().setUp()
+        desktop.ASSISTANT = True
+        self.cloud = self.root / 'cloud'; self.cloud.mkdir()
+        desktop.DEFAULT_CLOUD_PATH = str(self.cloud)
+
+    def status(self, path, payload):
+        try:
+            self.post(path, payload); return 200
+        except urllib.error.HTTPError as error:
+            return error.code, json.loads(error.read())
+
+    def test_default_is_computer_account_and_setting_overrides_it(self):
+        with patch.dict('os.environ', {'USERNAME': 'win-user'}):
+            self.assertEqual(self.status('/api/config', {'key': 'uploader', 'value': {'name': '同事甲'}})[0], 400)
+            self.assertEqual(desktop.uploader_name(), 'win-user')
+
+    test_uploader_is_stamped_once_and_cannot_be_forged = None
+    test_cloud_master_has_server_filled_uploader_column = None
+
+    def test_cloud_path_is_fixed_and_hidden(self):
+        config = self.get('/api/config')
+        self.assertEqual(config['edition'], 'assistant')
+        self.assertNotIn(str(self.cloud), json.dumps(config, ensure_ascii=False))
+        self.assertEqual(self.status('/api/config', {'key': 'cloudExcel', 'value': {'path': str(self.root)}})[0], 400)
+        desktop.put('config', 'cloudExcel', {'key': 'cloudExcel', 'value': {'path': str(self.root / 'elsewhere')}})
+        self.assertEqual(desktop.cloud_path(), str(self.cloud), 'a stored path is ignored')
+        result = self.post('/api/excel/cloud-merge', {'rows': [{'项目名称': '合同一', '合同ID': 'c1'}]})
+        self.assertNotIn('path', result)
+        self.assertTrue((self.cloud / excel_table.MASTER_NAME).exists())
+
+    def test_errors_do_not_reveal_the_path(self):
+        desktop.DEFAULT_CLOUD_PATH = str(self.root / 'missing' / 'folder')
+        code, body = self.status('/api/excel/cloud-merge', {'rows': [{'项目名称': '合同一', '合同ID': 'c1'}]})
+        self.assertEqual(code, 422)
+        self.assertNotIn('missing', body['error']); self.assertIn('管理员', body['error'])
+        message = desktop.hide_cloud_path('无法访问内网共享文件夹：\\\\host.example\\share\\合同。请先在文件资源管理器中打开并用域账号登录后重试')
+        self.assertNotIn('host.example', message); self.assertIn('联系管理员', message)
 
 
 class DefaultCloudPathTests(unittest.TestCase):

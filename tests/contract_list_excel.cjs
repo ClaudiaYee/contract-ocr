@@ -4,7 +4,7 @@ const repo=path.resolve(__dirname,'..'),py=process.env.PYTHON||'python';
 const pyRun=code=>execFileSync(py,['-c','import sys,json;sys.path.insert(0,'+JSON.stringify(path.join(repo,'native'))+');import excel_table as e\n'+code]).toString('utf8');
 (async()=>{const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'x-')),cloud=fs.mkdtempSync(path.join(os.tmpdir(),'cloud-')),work=fs.mkdtempSync(path.join(os.tmpdir(),'xl-')),port=25000+Math.floor(Math.random()*5000),origin='http://127.0.0.1:'+port;
 const executable=process.argv[2],command=executable?path.resolve(executable):py,args=executable?['--no-browser']:['native/desktop.py','--no-browser'];
-const s=spawn(command,args,{cwd:repo,env:{...process.env,CONTRACT_OCR_DATA_DIR:tmp,CONTRACT_OCR_PORT:String(port),CONTRACT_OCR_CLOUD_DEFAULT:'',CONTRACT_OCR_DIAGNOSTICS:'1'}});let logs='';s.stderr.on('data',d=>logs+=d);s.stdout.on('data',d=>logs+=d);
+const s=spawn(command,args,{cwd:repo,env:{...process.env,CONTRACT_OCR_DATA_DIR:tmp,CONTRACT_OCR_PORT:String(port),CONTRACT_OCR_CLOUD_DEFAULT:cloud,CONTRACT_OCR_EDITION:'assistant',CONTRACT_OCR_DIAGNOSTICS:'1'}});let logs='';s.stderr.on('data',d=>logs+=d);s.stdout.on('data',d=>logs+=d);
 const options={headless:true};if(process.env.OCR_TEST_CHROMIUM){options.executablePath=process.env.OCR_TEST_CHROMIUM;options.args=['--no-sandbox'];}
 const b=await chromium.launch(options);
 const toast=(page,text)=>page.waitForFunction(t=>[...document.querySelectorAll('.toast')].some(x=>x.textContent.includes(t)),text,{timeout:15000});
@@ -25,10 +25,11 @@ await p.waitForTimeout(500);const cells=await p.locator('tr[data-id="a1"] td').a
 const master=path.join(cloud,'合同识别总表.xlsx');
 pyRun('h=["项目名称","上传者ID","Engagement Code","Engagement Code Description","甲方","原始关键词","服务领域","PIC","EIC","FIC","来源文件","合同ID"];open('+JSON.stringify(master)+',"wb").write(e.write_xlsx(h,[{"项目名称":"他人SOC2项目","上传者ID":"GV371QP","Engagement Code":"E-9","Engagement Code Description":"secret","甲方":"丙公司","原始关键词":"SOC2类型二鉴证；SOC2报告；内部控制","PIC":"周九","FIC":"x","来源文件":"丙-IPO.pdf","合同ID":"remote-gv"}]))');
 const cloudUpload=async()=>{await p.locator('[data-ok]').click();};
-await p.locator('#cloudMergeBtn').click();await cloudUpload();await toast(p,'设置');
-await p.locator('#cfgCloudExcel').fill(cloud);await p.locator('#saveCloudExcelBtn').click();await p.waitForFunction(()=>document.getElementById('cloudExcelState').textContent.includes('已保存'));
-await p.reload();await p.waitForFunction(()=>window.__CONTRACT_OCR_READY);await p.locator('[data-view="settings"]').click();await p.waitForFunction(v=>document.getElementById('cfgCloudExcel').value===v,cloud);
-await p.locator('[data-view="upload"]').click();await p.locator('#cloudMergeBtn').click();await cloudUpload();await toast(p,'新增 2 行');
+// 小秘书版：没有系统设置页，云盘路径固定为内置路径，页面拿不到、也不能修改
+assert.equal(await p.locator('[data-view="settings"]').count(),0);assert.equal(await p.locator('#view-settings, #cfgCloudExcel').count(),0);
+const cfg=await p.evaluate(()=>NativeDocuments.request('/api/config'));assert.equal(cfg.edition,'assistant');assert(!JSON.stringify(cfg).includes(path.basename(cloud)),'cloud path must not reach the page');
+const denied=await p.evaluate(async()=>(await fetch('/api/config',{method:'POST',headers:{...NativeDocuments.headers(),'Content-Type':'application/json'},body:JSON.stringify({key:'cloudExcel',value:{path:'C:/elsewhere'}})})).status);assert.equal(denied,400,'cloud path cannot be changed from the page');
+await p.locator('[data-view="upload"]').click();await p.locator('#cloudMergeBtn').click();await cloudUpload();await toast(p,'新增 2 行');assert(!(await p.locator('.toast').allInnerTexts()).join('').includes(path.basename(cloud)),'merge toast hides the path');
 const readMaster=file=>JSON.parse(pyRun('h,r=e.read_xlsx(open('+JSON.stringify(file)+',"rb").read());sys.stdout.buffer.write(json.dumps({"h":h,"r":r}).encode())'));
 let m=readMaster(master);console.log(m.h,m.r.map(r=>[r['项目名称'],r['服务领域'],r['具体服务']]));
 for(const column of ['Engagement Code','Engagement Code Description','来源文件','FIC'])assert(!m.h.includes(column),column+' must not be in the shared master');
@@ -59,16 +60,9 @@ const exportFile=async name=>{const [dl]=await Promise.all([p.waitForEvent('down
 let x=await exportFile('picked.xlsx');assert.equal(x.r.length,1);assert.equal(x.r[0]['合同ID'],'remote-gv');assert.equal(x.r[0]['上传者ID'],'GV371QP','others keep their uploader id');assert(!x.h.includes('来源文件')&&!x.h.includes('Engagement Code')&&!x.h.includes('FIC'));
 await remoteRow.locator('[data-select]').uncheck();x=await exportFile('all.xlsx');assert.equal(x.r.length,2);assert.equal(x.r.find(r=>r['合同ID']==='a1')['上传者ID'],me);
 await p.locator('#demo-selectAll').check();assert((await p.locator('#demo-selectedCount').innerText()).includes('已勾选 2'));await p.locator('#demo-selectAll').uncheck();
-// 切换云盘路径后检索跟随
-const otherMaster=path.join(work,'other-master.xlsx');
-pyRun('open('+JSON.stringify(otherMaster)+',"wb").write(e.write_xlsx(e.COLUMNS,[{"\\u9879\\u76ee\\u540d\\u79f0":"other from second master","\\u4e0a\\u4f20\\u8005ID":"\\u540c\\u4e8b\\u4e59","\\u5408\\u540cID":"remote-1"}]))');
-await p.locator('[data-view="settings"]').click();
-await p.waitForFunction(v=>document.getElementById('cfgCloudExcel').value===v&&!document.getElementById('saveCfgBtn').disabled,cloud);
-await p.locator('#cfgCloudExcel').fill(otherMaster);
-await p.locator('#saveCloudExcelBtn').click();
-await p.waitForFunction(()=>document.getElementById('cloudExcelState').textContent.includes('已保存'));
-await p.locator('[data-view="vault-search"]').click();
-await p.locator('#demo-keyword').fill('other');
+// 总表中再出现一份他人上传的合同，检索即可查到
+pyRun('e.merge_into_master('+JSON.stringify(cloud)+',[{"\\u9879\\u76ee\\u540d\\u79f0":"other from second master","\\u4e0a\\u4f20\\u8005ID":"\\u540c\\u4e8b\\u4e59","\\u5408\\u540cID":"remote-1"}])');
+await p.locator('#demo-keyword').fill('');await p.locator('#demo-keyword').fill('other');
 const second=p.locator('#demo-resultBody tr.row-remote').filter({hasText:'other from second master'});
 await second.waitFor({timeout:5000}).catch(async error=>{console.error(await p.locator('#demo-summary').innerText(),await p.locator('#demo-resultBody').innerText());throw error;});
 assert.equal(await p.locator('#demo-resultBody tr.row-remote').count(),1);await second.locator('[data-row]').click();assert((await p.locator('#demo-vaultDetailBody').innerText()).includes('同事乙'));await p.locator('#demo-close').click();

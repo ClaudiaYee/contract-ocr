@@ -116,7 +116,7 @@ if (-not $SkipSmokeTest) {
 } else { Write-Host '已跳过 EXE 自检。' }
 Copy-Item 'README.md' 'dist\ContractOCR\README.md' -Force
 if (-not $NoZip) {
-    $zip = Join-Path $Root 'ContractOCR-Windows-x64.zip'
+    $zip = Join-Path $Root 'ContractOCR-Assistant-Windows-x64.zip'
     if (Test-Path $zip) { Remove-Item $zip -Force }
     Compress-Archive -Path 'dist\ContractOCR' -DestinationPath $zip
     $hash = (Get-FileHash $zip -Algorithm SHA256).Hash

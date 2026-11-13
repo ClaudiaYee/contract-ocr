@@ -173,7 +173,7 @@ const App = (() => {
     // 合同列表筛选（他人上传的合同在「合同检索」中查找）
     document.getElementById('searchInput').addEventListener('input', () => renderTable());
     // 上传到云端总表
-    document.getElementById('saveUploaderBtn').addEventListener('click',saveUploader);
+    document.getElementById('saveUploaderBtn')?.addEventListener('click',saveUploader);
 
     // 清空全部
     document.getElementById('clearAllBtn').addEventListener('click', () => {
@@ -191,21 +191,21 @@ const App = (() => {
     });
 
     // 导出/导入
-    document.getElementById('exportJsonBtn').addEventListener('click', exportJSON);
-    document.getElementById('exportBackupBtn').addEventListener('click', exportCompleteBackup);
-    document.getElementById('exportCsvBtn').addEventListener('click', exportCSV);
-    document.getElementById('exportAuditBtn').addEventListener('click', exportAuditCSV);
+    document.getElementById('exportJsonBtn')?.addEventListener('click', exportJSON);
+    document.getElementById('exportBackupBtn')?.addEventListener('click', exportCompleteBackup);
+    document.getElementById('exportCsvBtn')?.addEventListener('click', exportCSV);
+    document.getElementById('exportAuditBtn')?.addEventListener('click', exportAuditCSV);
     document.getElementById('exportSampleBtn').addEventListener('click', downloadSample);
     document.getElementById('importBtn').addEventListener('click', () => {
       document.getElementById('importFile').click();
     });
     document.getElementById('importFile').addEventListener('change', importData);
     document.getElementById('cloudMergeBtn').addEventListener('click', cloudMerge);
-    document.getElementById('saveCloudExcelBtn').addEventListener('click', saveCloudExcel);
+    document.getElementById('saveCloudExcelBtn')?.addEventListener('click', saveCloudExcel);
 
     // 设置 - 保存配置
-    document.getElementById('saveCfgBtn').addEventListener('click', saveConfig);
-    document.getElementById('clearStorageBtn').addEventListener('click', () => {
+    document.getElementById('saveCfgBtn')?.addEventListener('click', saveConfig);
+    document.getElementById('clearStorageBtn')?.addEventListener('click', () => {
       showConfirm('确定要清空全部数据吗？此操作不可恢复。', async () => {
         await Storage.clearAll();
         await loadContracts();
@@ -229,6 +229,7 @@ const App = (() => {
     if (viewName === 'dashboard' || viewName === 'keywords') viewName = 'list'; // 已移除的分析页
     // 我的合同（原合同列表）与上传识别在同一页
     const toMine = viewName === 'list'; if (toMine || viewName === 'cloud-share') viewName = 'upload';
+    if (!document.getElementById(`view-${viewName}`)) viewName = 'upload'; // 小秘书版没有系统设置页
     if (!Vault.canLeave()) return false;
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     document.querySelector(`.nav-item[data-view="${viewName}"]`).classList.add('active');
@@ -239,8 +240,6 @@ const App = (() => {
       if (toMine) requestAnimationFrame(() => document.getElementById('myContracts').scrollIntoView({ block: 'start' }));
     } else if (viewName === 'vault-search') {
       Vault.refresh(contracts);
-    } else if (viewName === 'settings') {
-      loadConfigToUI();
     }
     return true;
   }
@@ -582,8 +581,8 @@ const App = (() => {
     if(!list.length){showToast('暂无合同可合并','warning');return;}
     showConfirm(`将 ${list.length} 份合同合并到云盘总表（按合同ID更新或追加，合并前自动备份）？`, async()=>{
       const button=document.getElementById('cloudMergeBtn');button.disabled=true;const label=button.textContent;button.textContent='正在合并…';
-      try{const result=await (await excelPost('/api/excel/cloud-merge',{rows:excelRows(list)})).json();showToast(`已合并到云盘总表：新增 ${result.added} 行，更新 ${result.updated} 行，总表共 ${result.total} 行（${result.path}）`,'success');}
-      catch(error){showToast('合并失败：'+error.message,'error');if(/设置/.test(error.message))switchView('settings');}
+      try{const result=await (await excelPost('/api/excel/cloud-merge',{rows:excelRows(list)})).json();showToast(`已合并到云盘总表：新增 ${result.added} 行，更新 ${result.updated} 行，总表共 ${result.total} 行`,'success');}
+      catch(error){showToast('合并失败：'+error.message,'error');}
       finally{button.disabled=false;button.textContent=label;}
     });
   }
@@ -597,7 +596,7 @@ const App = (() => {
     if(!NativeDocuments.available())return;
     const cfg=await NativeDocuments.request('/api/config');
     uploaderSelf=((cfg.uploader||{}).name||'').trim()||cfg.uploaderDefault||'';
-    const input=document.getElementById('cfgUploader');input.value=((cfg.uploader||{}).name||'');input.placeholder='留空使用本机账户名：'+(cfg.uploaderDefault||'');
+    const input=document.getElementById('cfgUploader');if(input){input.value=((cfg.uploader||{}).name||'');input.placeholder='留空使用本机账户名：'+(cfg.uploaderDefault||'');}
     renderTable();
   }
 
@@ -1199,6 +1198,8 @@ const App = (() => {
 
   // ============== 配置管理 ==============
   async function loadConfigToUI() {
+    // 小秘书版没有系统设置页：只读取上传者ID（默认本机账户名），不显示云盘路径等管理员配置。
+    if(!document.getElementById('view-settings')){try{await loadUploader();}catch{}return;}
     const controls=['cfgWorkers','saveCfgBtn','cfgCloudExcel','saveCloudExcelBtn','cfgUploader','saveUploaderBtn'].map(id=>document.getElementById(id));
     controls.forEach(control=>control.disabled=true);
     try {

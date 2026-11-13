@@ -201,9 +201,32 @@ def initialize_store():
 DEFAULT_CLOUD_PATH = os.environ.get('CONTRACT_OCR_CLOUD_DEFAULT', r'\\cnshavapfl73.pacrim.ey.net\data\GZ_GROUP\CLIENT\TRDA\合同\测试')
 
 
+# 小秘书版（assistant）：没有系统设置页，云盘总表固定使用内置路径，路径不返回给页面、也不出现在提示中。
+# 需要修改位置时改 DEFAULT_CLOUD_PATH 后重新打包。
+EDITION = os.environ.get('CONTRACT_OCR_EDITION', 'assistant')
+ASSISTANT = EDITION == 'assistant'
+
+
 def cloud_path():
+    if ASSISTANT:
+        return DEFAULT_CLOUD_PATH
     configured=((get_record('config','cloudExcel') or {}).get('value') or {}).get('path','')
     return str(configured).strip() or DEFAULT_CLOUD_PATH
+
+
+def hide_cloud_path(message):
+    """Assistant edition: remove folder / file paths from 云盘总表 errors and point to the administrator."""
+    if not ASSISTANT:
+        return message
+    import re
+    text = re.sub(r'(?:\\\\|//)[^\s：:。，,]+|[A-Za-z]:[\\/][^\s：:。，,]*|/[^\s：:。，,]*/[^\s：:。，,]*', '云盘总表位置', str(message))
+    text = re.sub(r'请先在文件资源管理器[^。]*?(?:用域账号)?登录(?:后重试)?(?:，确认已连接公司内网后重试)?', '请确认已连接公司内网并已用域账号登录，仍无法访问请联系管理员', text)
+    text = text.replace('请先在「设置」里填写云盘同步文件夹或总表文件路径', '云盘总表位置未配置，请联系管理员')
+    text = text.replace('当前路径还没有云盘总表', '云盘总表还不存在')
+    text = text.replace('无法访问内网共享文件夹：云盘总表位置。', '无法访问云盘总表所在的内网共享文件夹。')
+    text = text.replace('找不到总表所在的文件夹：云盘总表位置', '找不到云盘总表所在的文件夹，请联系管理员')
+    text = text.replace('路径需要是已存在的文件夹，或以 .xlsx 结尾的文件：云盘总表位置', '云盘总表位置配置有误，请联系管理员')
+    return text
 
 
 def default_uploader():
@@ -565,7 +588,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if path == '/api/config':
             values = {item['key']: item['value'] for item in records('config')}
             values['uploaderDefault'] = default_uploader()
-            values['cloudExcelDefault'] = DEFAULT_CLOUD_PATH
+            values['edition'] = EDITION
+            if ASSISTANT:
+                values.pop('cloudExcel', None)
+            else:
+                values['cloudExcelDefault'] = DEFAULT_CLOUD_PATH
             return self.respond(200, values)
         if path == '/api/jobs':
             return self.respond(200, [{k: v for k, v in job.items() if k != 'result'} for job in job_records()])
@@ -726,9 +753,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 self.wfile.write(body)
                 return None
             with EXCEL_LOCK:
-                return self.respond(200, excel_table.merge_into_master(configured, rows))
+                result = excel_table.merge_into_master(configured, rows)
+            if ASSISTANT:
+                result.pop('path', None)
+            return self.respond(200, result)
         except excel_table.ExcelError as error:
-            return self.respond(422, {'error': str(error)})
+            return self.respond(422, {'error': hide_cloud_path(error)})
         except Exception as error:
             if os.environ.get('CONTRACT_OCR_DIAGNOSTICS') == '1':
                 import traceback
@@ -799,7 +829,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return self.respond(200,self.server.semantic_pool.submit(classify_scoped,payload.get('text',''),category).result(timeout=180))
             if path == '/api/config':
                 key = payload.get('key')
-                if key not in ['main', 'keywordPool', 'serviceDomains', 'cloudExcel', 'uploader']:
+                if key not in ['main', 'keywordPool', 'serviceDomains', 'cloudExcel', 'uploader'] or (ASSISTANT and key in ['cloudExcel', 'uploader']):
                     return self.respond(400, {'error': 'Invalid config key'})
                 put('config', key, {'key': key, 'value': payload.get('value')})
                 return self.respond(200, {'ok': True})

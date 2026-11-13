@@ -23,7 +23,7 @@
         </svg>
         <div>
           <h1 class="brand-title">合同智能识别系统</h1>
-          <p class="brand-subtitle">本地化 · 合同识别 · 合同检索</p>
+          <p class="brand-subtitle">本地化 · 合同识别 · 合同检索 · 小秘书版</p>
         </div>
       </div>
     </div>
@@ -40,10 +40,6 @@
           <span class="nav-badge" id="contractCount">0</span>
         </button>
         <button class="nav-item" data-view="vault-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><span>合同检索</span></button>
-        <button class="nav-item" data-view="settings">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-          <span>系统设置</span>
-        </button>
       </nav>
       <div class="sidebar-footer">
         <div class="storage-info">
@@ -116,80 +112,6 @@
       </section>
 
       
-      <section class="view" id="view-settings">
-        <div class="view-header">
-          <h2>系统设置</h2>
-          <p>统一配置：本机并发、上传者ID、云盘总表路径与数据维护。</p>
-        </div>
-
-        <div class="settings-grid">
-          <div class="settings-card">
-            <h3>本机性能</h3>
-            <p class="settings-desc">识别时同时运行的本机进程数</p>
-            <div class="settings-form">
-              <label>本机并发（重启EXE生效）</label><select id="cfgWorkers"><option value="auto">自动（可用内存不足1.2GB时1个，一般2个，12线程以上3个）</option><option value="1">1个进程，节省内存</option><option value="2">2个进程，并行处理</option><option value="3">3个进程，12线程及以上CPU、内存充足</option><option value="4">4个进程，16线程及以上CPU、16GB内存</option></select><p id="nativeWorkerState"></p>
-              <button class="btn btn-primary" id="saveCfgBtn">保存配置</button>
-            </div>
-          </div>
-
-          <div class="settings-card">
-            <h3>数据维护</h3>
-            <p class="settings-desc">备份、导出或清空本机合同库</p>
-            <div class="data-actions">
-              <button class="btn btn-primary" id="exportBackupBtn" hidden>完整备份ZIP（含可用原件）</button>
-              <button class="btn btn-primary" id="exportJsonBtn">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                导出JSON
-              </button>
-              <button class="btn btn-primary" id="exportAuditBtn">导出审计要点 CSV（Excel）</button>
-              <button class="btn btn-primary" id="exportCsvBtn">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                导出CSV
-              </button>
-              <button class="btn btn-danger" id="clearStorageBtn">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                清空全部数据
-              </button>
-            </div>
-          </div>
-
-          <div class="settings-card">
-            <h3>云盘 Excel 总表（保存路径）</h3>
-            <p class="settings-desc">合并到云盘总表、合同检索都使用这个位置。默认是团队内网共享文件夹，首次使用前请先在文件资源管理器中打开该地址并用域账号登录。也可以填写其他同步文件夹，或其中某个 .xlsx 文件。</p>
-            <div class="settings-form">
-              <label for="cfgCloudExcel">同步文件夹或总表路径</label>
-              <input type="text" id="cfgCloudExcel" placeholder="\\cnshavapfl73.pacrim.ey.net\data\GZ_GROUP\CLIENT\TRDA\合同\测试">
-              <p class="settings-desc" style="margin:4px 0 0">填文件夹时总表名为「合同识别总表.xlsx」。每次合并前自动备份为「…备份.xlsx」；总表里手动加的列会保留。</p>
-              <button class="btn btn-primary" id="saveCloudExcelBtn" type="button">保存路径</button>
-              <span id="cloudExcelState" role="status"></span>
-            </div>
-          </div>
-
-          <div class="settings-card">
-            <h3>上传者ID</h3>
-            <p class="settings-desc">合并到云盘总表时写入 Excel 的「上传者ID」列，用来看出每份合同是谁上传的。留空则使用本机 Windows 账户名。已上传合同的上传者不随修改变化。</p>
-            <div class="settings-form">
-              <label for="cfgUploader">上传者ID</label>
-              <input type="text" id="cfgUploader" maxlength="60">
-              <button class="btn btn-primary" id="saveUploaderBtn" type="button">保存上传者ID</button>
-              <span id="uploaderState" role="status"></span>
-            </div>
-          </div>
-
-          <div class="settings-card">
-            <h3>关于本系统</h3>
-            <p class="settings-desc">OCR 和关键词分析在本机运行</p>
-            <ul class="about-list">
-              <li><strong>PDF 解析引擎：</strong> 原生版 PyMuPDF / 浏览器版 PDF.js（含中文字符映射）</li>
-              <li><strong>扫描件 / 图片 OCR：</strong> PaddleOCR PP-OCRv4（原生 CPU / 浏览器离线）</li>
-              <li><strong>业务语义匹配：</strong> 原生版内置 BGE 中文模型，识别业务表述</li>
-              <li><strong>本地存储：</strong> 原生版：程序旁文件夹内的 JSON 数据及原文件；浏览器版：IndexedDB</li>
-              <li><strong>运行模式：</strong> 本机原生进程 / 浏览器备用 · v2.15.0</li>
-              <li><strong>隐私保护：</strong> 云盘总表由指定同步目录提供，合同原件及识别全文保存在本机</li>
-            </ul>
-          </div>
-        </div>
-      </section>
 <div class="vault-root"><section class="view" id="view-vault-search"><section id="demo-searchPage"><div class="view-header"><div><h2>合同检索</h2><p>检索本机合同与云盘 Excel 总表中他人上传的合同。他人上传的合同只能查看。</p></div></div>
 <div class="workspace search-workspace">
 <details class="search-advanced"><summary>高级筛选 · Engagement Name、服务领域、Tag</summary><aside class="panel" aria-label="合同筛选"><div class="panel-title"><span class="step">01</span><h2>筛选条件</h2><button type="button" class="text-btn" id="demo-reset">重置全部</button></div>

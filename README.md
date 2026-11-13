@@ -142,6 +142,9 @@
 
 # 合同识别 v2.12.0：本机 OCR、后台任务与业务内容归类
 
+> **小秘书版（分支 `feature/assistant-edition`）**：功能与主版本相同，但没有「系统设置」页。云盘总表固定使用内置路径（`native/desktop.py` 中的 `DEFAULT_CLOUD_PATH`），路径不在页面、配置接口或提示信息中出现，也不能从页面修改；上传者ID 固定为本机账户名。需要修改云盘位置时改 `DEFAULT_CLOUD_PATH` 后重新打包。打包结果为 `ContractOCR-Assistant-Windows-x64.zip`。
+
+
 ## Windows 下载即用
 
 到 [Releases](https://github.com/ClaudiaYee/contract-ocr-local/releases/tag/desktop-latest) 下载 **ContractOCR-Windows-x64.zip**，完整解压后双击 **ContractOCR.exe**。模型已随程序打包，运行时不需要安装 Python、下载模型或使用云端 OCR。适用于 Windows 10/11 x64；无需 GPU。
