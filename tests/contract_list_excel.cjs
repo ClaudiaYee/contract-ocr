@@ -64,6 +64,14 @@ const exportFile=async name=>{const [dl]=await Promise.all([p.waitForEvent('down
 let x=await exportFile('picked.xlsx');assert.equal(x.r.length,1);assert.equal(x.r[0]['合同ID'],'remote-gv');assert.equal(x.r[0]['上传者ID'],'GV371QP','others keep their uploader id');assert(!x.h.includes('来源文件')&&!x.h.includes('Engagement Code')&&!x.h.includes('FIC'));
 await remoteRow.locator('[data-select]').uncheck();x=await exportFile('all.xlsx');assert.equal(x.r.length,2);assert.equal(x.r.find(r=>r['合同ID']==='a1')['上传者ID'],me);
 await p.locator('#demo-selectAll').check();assert((await p.locator('#demo-selectedCount').innerText()).includes('已勾选 2'));await p.locator('#demo-selectAll').uncheck();
+// 加密全文检索索引：他人合同正文里的词（总表列中没有）也能搜到，命中词以虚线标签显示
+pyRun('import fulltext_index as f;f.write(e.master_path('+JSON.stringify(cloud)+'),"remote-gv","\u670d\u52a1\u5185\u5bb9\uff1a\u8bc4\u4f30\u5ba2\u6237\u6d88\u8d39\u54c1\u4e1a\u52a1\u7684\u7cfb\u7edf\u63a7\u5236\u3002")');
+await p.locator('#demo-keyword').fill('消费品');
+const textHit=p.locator('#demo-resultBody tr.row-remote').filter({hasText:'他人SOC2项目'});
+await p.waitForFunction(()=>!document.getElementById('demo-summary').textContent.includes('正在')&&[...document.querySelectorAll('#demo-resultBody tr.row-remote .list-kw.from-text')].some(x=>x.textContent.includes('消费品')));assert.equal(await p.locator('#demo-resultBody tr[data-id="a1"]').count(),0);
+assert((await textHit.locator('.list-kw.from-text').innerText()).includes('消费品'));
+assert(!fs.readFileSync(path.join(cloud,'合同识别总表.检索索引',fs.readdirSync(path.join(cloud,'合同识别总表.检索索引')).find(n=>n.endsWith('.idx')))).includes(Buffer.from('消费')),'index has no plaintext');
+await p.locator('#demo-keyword').fill('SOC2');await remoteRow.waitFor();
 // 切换云盘路径后检索跟随
 const otherMaster=path.join(work,'other-master.xlsx');
 pyRun('open('+JSON.stringify(otherMaster)+',"wb").write(e.write_xlsx(e.COLUMNS,[{"\\u9879\\u76ee\\u540d\\u79f0":"other from second master","\\u4e0a\\u4f20\\u8005ID":"\\u540c\\u4e8b\\u4e59","\\u5408\\u540cID":"remote-1"}]))');

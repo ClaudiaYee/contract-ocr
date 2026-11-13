@@ -60,7 +60,7 @@ class UploaderTests(unittest.TestCase):
 
     def test_cloud_master_has_server_filled_uploader_column(self):
         self.post('/api/config', {'key': 'uploader', 'value': {'name': '同事甲'}})
-        self.post('/api/contracts', {'action': 'add', 'contract': {'id': 'c1', 'projectName': '合同一'}})
+        self.post('/api/contracts', {'action': 'add', 'contract': {'id': 'c1', 'projectName': '合同一', 'rawText': '服务内容：评估客户消费电子业务的系统控制。'}})
         cloud = self.root / 'cloud'; cloud.mkdir()
         self.post('/api/config', {'key': 'cloudExcel', 'value': {'path': str(cloud)}})
         row = {'项目名称': '合同一', '上传者ID': '冒充的人', '合同ID': 'c1'}
@@ -75,6 +75,12 @@ class UploaderTests(unittest.TestCase):
         excel_table.merge_into_master(str(cloud), [{'项目名称': '他人合同', '上传者ID': '同事乙', '合同ID': 'remote-1'}])
         found = self.post('/api/excel/cloud-search', {'query': '他人合同', 'people': {}, 'directIds': [], 'relatedIds': []})
         self.assertEqual(found['rows'][0]['row']['上传者ID'], '同事乙')
+        # 合并时写入加密全文检索索引：正文中的词（不在表格列里）也能被检索到，索引文件里没有原文
+        hit = self.post('/api/excel/cloud-search', {'query': '消费电子', 'people': {}, 'directIds': [], 'relatedIds': []})
+        self.assertEqual([(r['row']['合同ID'], r['textTerms']) for r in hit['rows']], [('c1', ['消费电子'])])
+        index_files = list((cloud / '合同识别总表.检索索引').iterdir())
+        self.assertEqual(len(index_files), 1)
+        self.assertNotIn('消费'.encode(), index_files[0].read_bytes())
 
 
 class DefaultCloudPathTests(unittest.TestCase):

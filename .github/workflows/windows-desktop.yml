@@ -91,7 +91,7 @@ jobs:
       - name: Bundle program and offline models
         run: >-
           python -m PyInstaller --noconfirm --clean --onedir --name ContractOCR --version-file version_info.txt --noupx
-          --paths native --hidden-import documents --hidden-import engine --hidden-import semantic --hidden-import page_quality --hidden-import layout_quality --hidden-import recovery --hidden-import ocr_cache --hidden-import text_normalize --hidden-import date_review --hidden-import ocr_dictionary --hidden-import excel_table
+          --paths native --hidden-import documents --hidden-import engine --hidden-import semantic --hidden-import page_quality --hidden-import layout_quality --hidden-import recovery --hidden-import ocr_cache --hidden-import text_normalize --hidden-import date_review --hidden-import ocr_dictionary --hidden-import excel_table --hidden-import fulltext_index
           --collect-all rapidocr_onnxruntime --collect-all onnxruntime
           --collect-all pyclipper --collect-all shapely --collect-all pymupdf --collect-all tokenizers
           --add-data "models/semantic_model;semantic_model" --add-data "models/ocr_models;ocr_models" --add-data "index.html;web" --add-data "js;web/js"

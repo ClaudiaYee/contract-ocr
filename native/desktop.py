@@ -206,6 +206,22 @@ def cloud_path():
     return str(configured).strip() or DEFAULT_CLOUD_PATH
 
 
+def write_fulltext_indexes(configured, rows):
+    """合并到云盘总表时，为本机合同写入加密全文检索索引（不含可读原文），他人检索时可搜到正文中的词。"""
+    import excel_table, fulltext_index
+    master = excel_table.master_path(configured)
+    for row in rows:
+        identifier = row.get('合同ID')
+        contract = get_record('contracts', identifier) if isinstance(identifier, str) and identifier else None
+        text = (contract or {}).get('rawText') or ''
+        if not text.strip():
+            continue
+        try:
+            fulltext_index.write(master, identifier, text)
+        except OSError:
+            raise excel_table.ExcelError('总表已合并，但全文检索索引写入失败，请检查文件夹权限后重新合并')
+
+
 def default_uploader():
     """This computer's Windows / system account name, used until 系统设置 sets a 上传者ID."""
     import getpass
@@ -726,7 +742,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 self.wfile.write(body)
                 return None
             with EXCEL_LOCK:
-                return self.respond(200, excel_table.merge_into_master(configured, rows))
+                result = excel_table.merge_into_master(configured, rows)
+                write_fulltext_indexes(configured, rows)
+            return self.respond(200, result)
         except excel_table.ExcelError as error:
             return self.respond(422, {'error': str(error)})
         except Exception as error:
