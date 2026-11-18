@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.error
 import urllib.request
 
 
@@ -48,8 +49,11 @@ def main():
             token = json.loads(re.search(r'window\.__LOCAL_OCR_TOKEN=("[^"\\]*");', html)[1])
             headers = {'Origin': origin, 'X-OCR-Token': token, 'Content-Type': 'application/octet-stream', 'X-Filename': 'synthetic.pdf', 'X-OCR-Mode': 'balanced'}
             semantic_headers = {'Origin': origin, 'X-OCR-Token': token, 'Content-Type': 'application/json'}
-            semantic = json.loads(request('/api/semantic', data=json.dumps({'text': '协助拟进入证券市场的公司完成面向公众发售股份的申报准备。'}).encode(), headers=semantic_headers))
-            assert any(tag['code'] == 'SEM_IPO_RELATED' for tag in semantic['semanticTags']), semantic
+            # 语义模型已移除（2.15.1）：接口不再存在，分析范围仍由规则确定。
+            try:
+                request('/api/semantic', data=b'{}', headers=semantic_headers); raise AssertionError('/api/semantic should be gone')
+            except urllib.error.HTTPError as error:
+                assert error.code == 404, error.code
             image = Image.new('RGB', (1280, 800), 'white')
             draw = ImageDraw.Draw(image)
             font = ImageFont.truetype('C:/Windows/Fonts/arial.ttf', 64)
@@ -159,7 +163,7 @@ def main():
             timing={'originalScannedOCRSeconds':round(results[0]['seconds'],3),'cachedUploadToSavedSeconds':cache_elapsed,'cachedOCRSeconds':reused['seconds']}
             print('PASS scanned OCR cache, exact text/layout preservation, independent analysis:',json.dumps(timing))
             Path('packaged-validation.json').write_text(json.dumps({'version':health['version'],'syntheticOnly':True,'workers':health['workers'],'timing':timing,'resumedPages':resumed['resumedPages'],'checks':['two workers','OCR page geometry','semantic model','cancellation','invalid input isolation','retry','forced EXE restart and checkpoint resume','saved notes','backup original bytes and archive integrity']}),encoding='utf-8')
-            print('Packaged Windows regression passed: OCR, semantics, cancellation, retry, forced restart/resume, annotation persistence and complete backup.')
+            print('Packaged Windows regression passed: OCR, cancellation, retry, forced restart/resume, annotation persistence and complete backup.')
         finally:
             subprocess.run(['taskkill', '/F', '/T', '/PID', str(process.pid)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
             process.wait(timeout=20)

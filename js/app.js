@@ -17,7 +17,6 @@ const App = (() => {
     if(!(c.managedBusinessAnalysis&&c.analysisStatus==='done'&&c.ruleAnalysisStatus==='done'))return label;
     const parts=[];
     if(c.ruleAnalysisSeconds!=null)parts.push('规则 '+Number(c.ruleAnalysisSeconds).toFixed(1)+' 秒');
-    if(c.analysisSeconds!=null)parts.push('语义 '+Number(c.analysisSeconds).toFixed(1)+' 秒');
     return parts.length?label+'（'+parts.join(' · ')+'）':label;
   };
   const ocrTimingLabel=c=>{
@@ -786,7 +785,7 @@ const App = (() => {
     const body = document.getElementById('detailBody');
     body.innerHTML = `
       <div class="detail-section">
-        <div class="analysis-toolbar"><span id="analysisState" data-contract-id="${escapeHtml(contract.id)}">${escapeHtml(analysisLabel(contract))}</span><span class="analysis-timing">OCR${contract.ocrModel?'（'+escapeHtml(contract.ocrModel)+'）':''} ${Number(contract.processingSeconds??contract.elapsedSeconds??0).toFixed(1)} 秒 · 规则分析 ${contract.ruleAnalysisSeconds!=null?Number(contract.ruleAnalysisSeconds).toFixed(1)+' 秒':'—'} · 语义任务 ${contract.analysisSeconds!=null?Number(contract.analysisSeconds).toFixed(1)+' 秒':'—'}</span><button type="button" id="reanalyzeBusiness" class="btn btn-ghost btn-sm">重新分析（无需 OCR）</button></div>
+        <div class="analysis-toolbar"><span id="analysisState" data-contract-id="${escapeHtml(contract.id)}">${escapeHtml(analysisLabel(contract))}</span><span class="analysis-timing">OCR${contract.ocrModel?'（'+escapeHtml(contract.ocrModel)+'）':''} ${Number(contract.processingSeconds??contract.elapsedSeconds??0).toFixed(1)} 秒 · 规则分析 ${contract.ruleAnalysisSeconds!=null?Number(contract.ruleAnalysisSeconds).toFixed(1)+' 秒':'—'}</span><button type="button" id="reanalyzeBusiness" class="btn btn-ghost btn-sm">重新分析（无需 OCR）</button></div>
         <h4>基本信息</h4>
         <div class="detail-grid">
           <div class="detail-item">

@@ -296,7 +296,7 @@ def analysis_state(contract):
     return {k:contract.get(k) for k in ['id','analysisStatus','analysisRequest','analysisError','ruleAnalysisStatus','ruleAnalysisError','ruleAnalysisSeconds']}
 
 def analysis_fingerprint(contract):
-    return hashlib.sha256(('analysis-2.15.1:'+contract.get('uploadCategory','other')+':'+contract.get('rawText','')).encode()).hexdigest()
+    return hashlib.sha256(('analysis-2.15.2:'+contract.get('uploadCategory','other')+':'+contract.get('rawText','')).encode()).hexdigest()
 
 def queue_analysis(server, identifier, force=False):
     from analysis_scope import classify_scoped
@@ -695,7 +695,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return self.respond(200 if result is not None else 404, result or {'error': 'Job not found'})
         if parsed.path in ['/api/excel/export', '/api/excel/parse', '/api/excel/cloud-merge', '/api/excel/cloud-search']:
             return self.excel(parsed.path)
-        if parsed.path in ['/api/jobs', '/api/contracts', '/api/config', '/api/semantic', '/api/analysis', '/api/business-analysis']:
+        if parsed.path in ['/api/jobs', '/api/contracts', '/api/config', '/api/analysis', '/api/business-analysis']:
             return self.mutate(parsed.path)
         if parsed.path != '/api/ocr':
             return self.respond(404, {'error': 'Not found'})
@@ -845,11 +845,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 if not isinstance(identifier,str) or not get_record('contracts',identifier):return self.respond(404,{'error':'合同不存在'})
                 contract=queue_analysis(self.server,identifier,force=bool(payload.get('force',True)))
                 return self.respond(202,{'id':identifier,'analysisStatus':contract['analysisStatus']})
-            if path == '/api/semantic':
-                from analysis_scope import classify_scoped
-                category=payload.get('uploadCategory','other')
-                if category not in ['ey-template','other']:return self.respond(400,{'error':'Unknown upload category'})
-                return self.respond(200,self.server.semantic_pool.submit(classify_scoped,payload.get('text',''),category).result(timeout=180))
             if path == '/api/config':
                 key = payload.get('key')
                 if key not in ['main', 'keywordPool', 'serviceDomains', 'cloudExcel', 'uploader'] or (ASSISTANT and key in ['cloudExcel', 'uploader']):
@@ -959,7 +954,8 @@ def main():
         print(f'{PORT}端口已被占用。如程序已打开，请使用已有窗口；否则关闭旧程序后重试。')
         return
     initialize_store()
-    from semantic import initialize_worker
+    from analysis_scope import initialize_worker
+    # 分析进程只确定分析范围（附录一／工作说明书），不再加载语义模型。
     semantic_pool = concurrent.futures.ProcessPoolExecutor(max_workers=1, mp_context=multiprocessing.get_context('spawn'), initializer=initialize_worker)
     server.worker_count=worker_count()
     pool=create_ocr_pool(server.worker_count)

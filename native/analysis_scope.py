@@ -74,7 +74,28 @@ def _locate(text, category='other'):
     return empty or dict(status='missing',start=0,end=0,text='',label='未定位附录一／工作说明书，未生成自动Tag')
 
 def classify_scoped(text, category='other'):
-    from semantic import classify
+    """Resolve which part of the contract is analysed. The pretrained semantic model was removed in 2.15.1
+    (its candidates were no longer shown or exported); all tags now come from the rule-based analyser."""
     scope=resolve_scope(text,category)
-    result=classify(scope['text']) if scope['text'].strip() else {'semanticTags':[]}
-    return {**result,'uploadCategory':category,'analysisScope':{k:v for k,v in scope.items() if k!='text'}}
+    return {'semanticTags':[],'semanticModel':None,'semanticNote':'','uploadCategory':category,'analysisScope':{k:v for k,v in scope.items() if k!='text'}}
+
+
+def initialize_worker():
+    """Analysis worker: lower priority so OCR stays responsive; no model is loaded."""
+    import os, sys
+    if sys.platform.startswith('linux'):
+        from pathlib import Path
+        sys.path.insert(0, str(Path(__file__).parent))
+        import offline_guard  # noqa: F401
+    try:
+        if os.name == 'nt':
+            import ctypes
+            from ctypes import wintypes
+            kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+            kernel.GetCurrentProcess.restype = wintypes.HANDLE
+            kernel.SetPriorityClass.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+            kernel.SetPriorityClass(kernel.GetCurrentProcess(), 0x00004000)  # BELOW_NORMAL_PRIORITY_CLASS
+        else:
+            os.nice(5)
+    except Exception:
+        pass
