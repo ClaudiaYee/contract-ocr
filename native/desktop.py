@@ -741,6 +741,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(body)
                 return None
+            # 合并到云盘总表时 PIC、EIC 必填（页面已拦截，这里再校验一次，不能绕过）
+            missing = [str(row.get('项目名称') or row.get('合同ID') or '未命名合同') for row in rows
+                       if not str(row.get('PIC') or '').strip() or not str(row.get('EIC') or '').strip()]
+            if missing:
+                names = '、'.join(missing[:5]) + (f' 等 {len(missing)} 份' if len(missing) > 5 else '')
+                raise excel_table.ExcelError(f'以下合同未填写 PIC 或 EIC，补充后才能合并到云盘总表：{names}')
             with EXCEL_LOCK:
                 result = excel_table.merge_into_master(configured, rows)
                 write_fulltext_indexes(configured, rows)

@@ -6,6 +6,7 @@ import sys
 import tempfile
 import threading
 import unittest
+import urllib.error
 import urllib.request
 from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'native'))
@@ -63,7 +64,14 @@ class UploaderTests(unittest.TestCase):
         self.post('/api/contracts', {'action': 'add', 'contract': {'id': 'c1', 'projectName': '合同一', 'rawText': '服务内容：评估客户消费电子业务的系统控制。'}})
         cloud = self.root / 'cloud'; cloud.mkdir()
         self.post('/api/config', {'key': 'cloudExcel', 'value': {'path': str(cloud)}})
-        row = {'项目名称': '合同一', '上传者ID': '冒充的人', '合同ID': 'c1'}
+        # PIC、EIC 为空时服务端拒绝合并
+        for empty in ({'PIC': '赵六', 'EIC': ' '}, {'PIC': '', 'EIC': '王五'}, {}):
+            with self.assertRaises(urllib.error.HTTPError) as caught:
+                self.post('/api/excel/cloud-merge', {'rows': [{'项目名称': '合同一', '合同ID': 'c1', **empty}]})
+            self.assertEqual(caught.exception.code, 422)
+            self.assertIn('PIC 或 EIC', json.loads(caught.exception.read())['error'])
+        self.assertFalse((cloud / excel_table.MASTER_NAME).exists(), 'nothing is written when PIC/EIC is missing')
+        row = {'项目名称': '合同一', '上传者ID': '冒充的人', '合同ID': 'c1', 'PIC': '赵六', 'EIC': '王五'}
         result = self.post('/api/excel/cloud-merge', {'rows': [row]})
         self.assertEqual(result['added'], 1)
         headers, rows = excel_table.read_xlsx((cloud / excel_table.MASTER_NAME).read_bytes())

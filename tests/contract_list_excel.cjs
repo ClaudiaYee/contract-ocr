@@ -28,7 +28,15 @@ const cloudUpload=async()=>{await p.locator('[data-ok]').click();};
 await p.locator('#cloudMergeBtn').click();await cloudUpload();await toast(p,'设置');
 await p.locator('#cfgCloudExcel').fill(cloud);await p.locator('#saveCloudExcelBtn').click();await p.waitForFunction(()=>document.getElementById('cloudExcelState').textContent.includes('已保存'));
 await p.reload();await p.waitForFunction(()=>window.__CONTRACT_OCR_READY);await p.locator('[data-view="settings"]').click();await p.waitForFunction(v=>document.getElementById('cfgCloudExcel').value===v,cloud);
-await p.locator('[data-view="upload"]').click();await p.locator('#cloudMergeBtn').click();await cloudUpload();await toast(p,'新增 2 行');
+// PIC、EIC 必填：a2 的 EIC 为空时不能合并，标红并打开编辑窗口，补充后才能合并
+await p.evaluate(async()=>{const c=(await Storage.getAllContracts()).find(x=>x.id==='a2');await Storage.updateContract({...c,knowledgeProfile:{...c.knowledgeProfile,eic:''}});});
+await p.reload();await p.waitForFunction(()=>window.__CONTRACT_OCR_READY);
+await p.locator('[data-view="upload"]').click();await p.locator('#cloudMergeBtn').click();await toast(p,'必须填写 PIC 和 EIC');
+assert.equal(await p.locator('[data-ok]').count(),0,'no confirm dialog when PIC/EIC is missing');
+await p.locator('#demo-editorDialog').waitFor({state:'visible'});assert.equal(await p.locator('#demo-editName').inputValue(),'示例乙公司ITGC审计');
+assert.equal(await p.locator('#contractTableBody tr.missing-people').count(),1);assert.equal(await p.locator('#contractTableBody tr.missing-people[data-id="a2"]').count(),1);
+await p.locator('#demo-editEic').fill('王五');await p.locator('#demo-editorForm [type=submit]').click();await p.locator('#demo-editorDialog').waitFor({state:'hidden'});
+await p.locator('#cloudMergeBtn').click();await cloudUpload();await toast(p,'新增 2 行');assert.equal(await p.locator('#contractTableBody tr.missing-people').count(),0);
 const readMaster=file=>JSON.parse(pyRun('h,r=e.read_xlsx(open('+JSON.stringify(file)+',"rb").read());sys.stdout.buffer.write(json.dumps({"h":h,"r":r}).encode())'));
 let m=readMaster(master);console.log(m.h,m.r.map(r=>[r['项目名称'],r['服务领域'],r['具体服务']]));
 for(const column of ['Engagement Code','Engagement Code Description','来源文件','FIC'])assert(!m.h.includes(column),column+' must not be in the shared master');
@@ -41,6 +49,7 @@ await p.locator('#cloudMergeBtn').click();await cloudUpload();await toast(p,'更
 // 合同检索：本机合同 + 他人上传（只读）；结果内按 PIC / EIC / 上传人筛选，勾选后导出 Excel
 await p.locator('[data-view="vault-search"]').click();
 assert(!(await p.locator('#demo-searchResults').isVisible()));
+const help=await p.locator('#demo-searchHelp').innerText();for(const part of ['空格','逗号','分号','全部包含','包含任一'])assert(help.includes(part),part+' explained under the search box');
 await p.locator('#demo-keyword').fill('SOC2');
 const remoteRow=p.locator('#demo-resultBody tr.row-remote').filter({hasText:'他人SOC2项目'});
 await remoteRow.waitFor();await p.locator('#demo-resultBody tr[data-id="a1"]').waitFor();
