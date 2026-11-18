@@ -49,7 +49,11 @@ await p.locator('#cloudMergeBtn').click();await cloudUpload();await toast(p,'更
 // 合同检索：本机合同 + 他人上传（只读）；结果内按 PIC / EIC / 上传人筛选，勾选后导出 Excel
 await p.locator('[data-view="vault-search"]').click();
 assert(!(await p.locator('#demo-searchResults').isVisible()));
-const help=await p.locator('#demo-searchHelp').innerText();for(const part of ['空格','逗号','分号','全部包含','包含任一'])assert(help.includes(part),part+' explained under the search box');
+assert(!(await p.locator('#demo-searchHelp').isVisible()),'help is folded behind the ? button');
+await p.locator('#demo-searchHelpBtn').click();await p.locator('#demo-searchHelp').waitFor({state:'visible'});assert.equal(await p.locator('#demo-searchHelpBtn').getAttribute('aria-expanded'),'true');
+const help=await p.locator('#demo-searchHelp').innerText();for(const part of ['空格','逗号','分号','全部包含','包含任一'])assert(help.includes(part),part+' explained in the help popover');
+await p.keyboard.press('Escape');await p.locator('#demo-searchHelp').waitFor({state:'hidden'});
+await p.locator('#demo-searchHelpBtn').click();await p.locator('#demo-searchHelp').waitFor({state:'visible'});await p.locator('#demo-keyword').click();await p.locator('#demo-searchHelp').waitFor({state:'hidden'});
 await p.locator('#demo-keyword').fill('SOC2');
 const remoteRow=p.locator('#demo-resultBody tr.row-remote').filter({hasText:'他人SOC2项目'});
 await remoteRow.waitFor();await p.locator('#demo-resultBody tr[data-id="a1"]').waitFor();

@@ -163,6 +163,11 @@ function updateSelection(){
  $('exportResults').disabled=!shown.length;
 }
 for(const id of Object.values(resultFilters))$(id).addEventListener('change',render);
+// 「多个关键词」旁的 ? 帮助：点击展开 / 收起，点外部或按 Esc 关闭
+{const btn=$('searchHelpBtn'),box=$('searchHelp');const show=open=>{box.hidden=!open;btn.setAttribute('aria-expanded',String(open));};
+ btn.addEventListener('click',e=>{e.stopPropagation();show(box.hidden);});
+ document.addEventListener('click',e=>{if(!box.hidden&&!box.contains(e.target)&&e.target!==btn)show(false);});
+ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!box.hidden){show(false);btn.focus();}});}
 let dateTimer=null;$('rfDate').addEventListener('input',()=>{clearTimeout(dateTimer);dateTimer=setTimeout(render,200);});
 $('resultBody').addEventListener('change',e=>{const box=e.target.closest('[data-select]');if(!box)return;if(box.checked)selected.add(box.dataset.select);else selected.delete(box.dataset.select);updateSelection();});
 $('selectAll').addEventListener('change',e=>{for(const item of shown){if(e.target.checked)selected.add(itemKey(item));else selected.delete(itemKey(item));}render();});
