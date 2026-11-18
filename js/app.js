@@ -579,6 +579,16 @@ const App = (() => {
     if(needDesktop())return;
     const list=listFiltered();
     if(!list.length){showToast('暂无合同可合并','warning');return;}
+    // PIC、EIC 必填：有缺失时不合并，标出这些合同并打开第一份的编辑窗口
+    const missing=list.filter(c=>{const p=listProfile(c);return !String(p.pic||'').trim()||!String(p.eic||'').trim();});
+    document.querySelectorAll('#contractTableBody tr.missing-people').forEach(tr=>tr.classList.remove('missing-people'));
+    if(missing.length){
+      missing.forEach(c=>document.querySelector(`#contractTableBody tr[data-id="${CSS.escape(c.id)}"]`)?.classList.add('missing-people'));
+      const names=missing.slice(0,3).map(c=>`「${c.projectName||'未识别项目'}」`).join('、')+(missing.length>3?` 等 ${missing.length} 份`:'');
+      showToast(`合并前必须填写 PIC 和 EIC：${names}未填写，已标红，请编辑补充后再合并`,'error');
+      Vault.openEditor(missing[0].id);
+      return;
+    }
     showConfirm(`将 ${list.length} 份合同合并到云盘总表（按合同ID更新或追加，合并前自动备份）？`, async()=>{
       const button=document.getElementById('cloudMergeBtn');button.disabled=true;const label=button.textContent;button.textContent='正在合并…';
       try{const result=await (await excelPost('/api/excel/cloud-merge',{rows:excelRows(list)})).json();showToast(`已合并到云盘总表：新增 ${result.added} 行，更新 ${result.updated} 行，总表共 ${result.total} 行`,'success');}

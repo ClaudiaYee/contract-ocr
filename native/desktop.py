@@ -217,7 +217,7 @@ def cloud_path():
 def hide_cloud_path(message):
     """Assistant edition: remove folder / file paths from 云盘总表 errors and point to the administrator."""
     if not ASSISTANT:
-        return message
+        return str(message)
     import re
     text = re.sub(r'(?:\\\\|//)[^\s：:。，,]+|[A-Za-z]:[\\/][^\s：:。，,]*|/[^\s：:。，,]*/[^\s：:。，,]*', '云盘总表位置', str(message))
     text = re.sub(r'请先在文件资源管理器[^。]*?(?:用域账号)?登录(?:后重试)?(?:，确认已连接公司内网后重试)?', '请确认已连接公司内网并已用域账号登录，仍无法访问请联系管理员', text)
@@ -768,6 +768,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(body)
                 return None
+            # 合并到云盘总表时 PIC、EIC 必填（页面已拦截，这里再校验一次，不能绕过）
+            missing = [str(row.get('项目名称') or row.get('合同ID') or '未命名合同') for row in rows
+                       if not str(row.get('PIC') or '').strip() or not str(row.get('EIC') or '').strip()]
+            if missing:
+                names = '、'.join(missing[:5]) + (f' 等 {len(missing)} 份' if len(missing) > 5 else '')
+                raise excel_table.ExcelError(f'以下合同未填写 PIC 或 EIC，补充后才能合并到云盘总表：{names}')
             with EXCEL_LOCK:
                 result = excel_table.merge_into_master(configured, rows)
                 write_fulltext_indexes(configured, rows)
