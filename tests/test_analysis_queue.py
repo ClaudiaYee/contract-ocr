@@ -38,7 +38,7 @@ class AnalysisQueueTests(unittest.TestCase):
         from unittest.mock import patch
         from documents import recognize_document
         pdf=fitz.open();pdf.new_page().insert_text((40,80),'Synthetic audit service');path=desktop.DATA_ROOT/'test.pdf';pdf.save(path);pdf.close()
-        with patch('semantic.classify',side_effect=AssertionError('OCR must not call analysis')):
+        with patch('analysis_scope.classify_scoped',side_effect=AssertionError('OCR must not call analysis')):
             result=recognize_document(str(path),'test.pdf','balanced',str(desktop.DATA_ROOT/'queue'/'p.json'))
         self.assertEqual(result['analysisStatus'],'queued');self.assertIn('Synthetic',result['rawText'])
 

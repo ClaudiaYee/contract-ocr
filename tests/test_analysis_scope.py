@@ -7,8 +7,9 @@ class AnalysisScopeTests(unittest.TestCase):
     def test_scope_and_semantic_input(self):
         raw='正文 服务内容：数据迁移。\n附录一 工作说明书\n服务内容：ITGC。\n附录二\n服务内容：流程优化。'
         scope=resolve_scope(raw,'ey-template');self.assertEqual(scope['status'],'found');self.assertNotIn('数据迁移',scope['text']);self.assertNotIn('流程优化',scope['text']);self.assertEqual(raw[scope['start']:scope['end']],scope['text'])
-        with patch('semantic.classify',return_value={'semanticTags':[]}) as classify:
-            result=classify_scoped(raw,'ey-template');classify.assert_called_once_with(scope['text']);self.assertEqual(result['uploadCategory'],'ey-template')
+        # 语义模型已移除：只返回分析范围，不再产生语义候选
+        result=classify_scoped(raw,'ey-template');self.assertEqual(result['uploadCategory'],'ey-template');self.assertEqual(result['semanticTags'],[]);self.assertIsNone(result['semanticModel']);self.assertEqual(result['analysisScope']['status'],'found')
+        self.assertFalse((Path(__file__).resolve().parents[1]/'native'/'semantic.py').exists(),'semantic model module removed')
     def test_english_appendix_boundary(self):
         scope=resolve_scope('Appendix I Statement of Work\nScope of services: ITGC.\nAppendix II Other Terms\nScope of services: data migration.','ey-template')
         self.assertNotIn('data migration',scope['text'])
@@ -32,8 +33,7 @@ class AnalysisScopeTests(unittest.TestCase):
     def test_other_legacy_and_missing(self):
         raw='服务内容：数据迁移。'
         self.assertEqual(resolve_scope(raw)['text'],raw)
-        with patch('semantic.classify') as classify:
-            self.assertEqual(classify_scoped(raw,'ey-template')['semanticTags'],[]);classify.assert_not_called()
+        self.assertEqual(classify_scoped(raw,'ey-template')['semanticTags'],[])
     def test_heading_variants_and_toc(self):
         for title in ['附 录 一\n工 作 说 明 书','Appendix I Statement of Work','Annex 1\nSOW','附件1：工作说明书']:
             scope=resolve_scope('正文\n'+title+'\n服务内容：ITGC。\n附录二\n数据迁移。','ey-template');self.assertEqual(scope['status'],'found');self.assertNotIn('数据迁移',scope['text'])

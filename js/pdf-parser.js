@@ -350,6 +350,8 @@ const PDFParser = (() => {
       cMapUrl: 'lib/pdfjs/cmaps/',
       cMapPacked: true,
       useSystemFonts: true,
+      // CVE-2024-4367：禁止 pdf.js 把字体数据编译成脚本执行，恶意 PDF 无法借此在页面中运行代码
+      isEvalSupported: false,
     }).promise;
 
     const pageCount = pdf.numPages;
