@@ -13,16 +13,24 @@ import shutil
 import tempfile
 import unicodedata
 import zipfile
+
+try:
+    from . import fulltext_index  # type: ignore
+except ImportError:
+    import fulltext_index
 from pathlib import Path
 from xml.etree import ElementTree as ET
 from xml.sax.saxutils import escape
 
-COLUMNS = ['项目名称', '甲方', '乙方', '签约时间', '原始关键词', 'PIC', 'EIC', 'FIC', '来源文件', '合同ID']
+COLUMNS = ['项目名称', '上传者ID', 'Engagement Name', '甲方', '乙方', '签约时间', '原始关键词', '服务领域', '具体服务', '系统', 'PIC', 'EIC', '合同ID']
+# 不再写入共享总表的列：Engagement Code / Description 与甲方名结合、来源文件名都可能透露客户未公开事项（如 IPO）；
+# FIC 不再使用。合并时从已有总表（含备份）中一并删除。
+REMOVED_COLUMNS = {'Engagement Code', 'Engagement Code Description', '来源文件', 'FIC'}
 ID_COLUMN = '合同ID'
 SYNC_COLUMN = '同步时间'
 SHEET_NAME = '合同列表'
 MASTER_NAME = '合同识别总表.xlsx'
-WIDTHS = {'项目名称': 42, '甲方': 28, '乙方': 28, '签约时间': 13, '原始关键词': 48, 'PIC': 12, 'EIC': 12, 'FIC': 12, '来源文件': 30, '合同ID': 30, '同步时间': 20}
+WIDTHS = {'项目名称': 42, '服务领域': 24, '具体服务': 36, '系统': 20, '上传者ID': 18, 'Engagement Name': 32, '甲方': 28, '乙方': 28, '签约时间': 13, '原始关键词': 48, 'PIC': 12, 'EIC': 12, '合同ID': 30, '同步时间': 20}
 NS = {'m': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
 REL_NS = '{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id'
 _ILLEGAL = re.compile('[\x00-\x08\x0b\x0c\x0e-\x1f]')
@@ -183,8 +191,8 @@ def merge_rows(headers: list[str], existing: list[dict], incoming: list[dict], s
 
     Hand-added columns in the existing table are kept; a blank incoming cell does not erase a filled one.
     """
-    merged_headers = list(COLUMNS) + [h for h in headers if h not in COLUMNS and h != SYNC_COLUMN] + [SYNC_COLUMN]
-    rows = [dict(r) for r in existing]
+    merged_headers = list(COLUMNS) + [h for h in headers if h not in COLUMNS and h not in REMOVED_COLUMNS and h != SYNC_COLUMN] + [SYNC_COLUMN]
+    rows = [{h: v for h, v in r.items() if h not in REMOVED_COLUMNS} for r in existing]
     index = {row_key(r): i for i, r in enumerate(rows)}
     added = updated = 0
     for row in incoming:
@@ -218,19 +226,34 @@ def master_path(configured: str) -> Path:
     path = Path(os.path.expandvars(os.path.expanduser(text)))
     if path.suffix.lower() == '.xlsx':
         if not path.parent.is_dir():
+            if text.startswith('\\\\'):
+                raise ExcelError('无法访问内网共享文件夹：' + str(path.parent) + '。请先在文件资源管理器中打开并用域账号登录后重试')
             raise ExcelError('找不到总表所在的文件夹：' + str(path.parent))
         return path
     if path.is_dir():
         return path / MASTER_NAME
+    if text.startswith('\\\\'):
+        raise ExcelError('无法访问内网共享文件夹：' + text + '。请先在文件资源管理器地址栏打开该路径并用域账号登录，确认已连接公司内网后重试')
     raise ExcelError('路径需要是已存在的文件夹，或以 .xlsx 结尾的文件：' + str(path))
 
 
-def search_master(configured: str, query: str, people: dict, eligible_ids: set | None,
-                  direct_ids: set, related_ids: set) -> dict:
-    def normalize(text):
-        return unicodedata.normalize('NFKC', text).casefold()
+TERM_SEPARATORS = re.compile(r'[\s,，;；、]+')
 
-    terms = normalize(query).split()
+
+def search_terms(query: str) -> list[str]:
+    """Several keywords separated by spaces, commas, semicolons or 、."""
+    return [term for term in TERM_SEPARATORS.split(unicodedata.normalize('NFKC', query or '').casefold()) if term]
+
+
+def search_master(configured: str, query: str, people: dict, eligible_ids: set | None,
+                  direct_ids: set, related_ids: set, match_any: bool = False) -> dict:
+    def normalize(text):
+        # 与本地检索一致：忽略空格、下划线、连字符和斜杠，「SOC2」也能命中「SOC 2」
+        return re.sub(r'[\s_\-/]+', '', unicodedata.normalize('NFKC', str(text or '')).casefold())
+
+    raw_terms = [term for term in search_terms(query) if normalize(term)]
+    terms = [normalize(term) for term in raw_terms]
+    combine = any if match_any else all
     if not terms and not any(people.values()) and eligible_ids is None:
         return {'rows': [], 'total': 0}
     path = master_path(configured)
@@ -252,14 +275,24 @@ def search_master(configured: str, query: str, people: dict, eligible_ids: set |
                for role in ('PIC', 'EIC')):
             continue
         person = normalize(people.get('person', ''))
-        if person and not any(person in normalize(public_row[role]) for role in ('PIC', 'EIC', 'FIC')):
+        if person and not any(person in normalize(public_row[role]) for role in ('PIC', 'EIC', '上传者ID')):
             continue
         fields = [normalize(value) for value in public_row.values()]
-        direct = identifier in direct_ids or all(any(term in field for field in fields) for term in terms)
+        in_fields = [any(term in field for field in fields) for term in terms]
+        text_terms = []
+        # 表格列里没有的词，再查该合同的加密全文检索索引（合并时由上传者电脑生成）
+        if terms and identifier and not all(in_fields):
+            index = fulltext_index.load(path, identifier)
+            if index is not None:
+                for i, term in enumerate(terms):
+                    if not in_fields[i] and fulltext_index.contains(index, raw_terms[i]):
+                        in_fields[i] = True
+                        text_terms.append(raw_terms[i])
+        direct = identifier in direct_ids or (bool(terms) and combine(in_fields))
         if direct or identifier in related_ids:
             total += 1
-            if len(matches) < 100:
-                matches.append({'row': public_row, 'kind': 'direct' if direct else 'related'})
+            if len(matches) < 500:
+                matches.append({'row': public_row, 'kind': 'direct' if direct else 'related', 'textTerms': text_terms if direct else []})
     return {'rows': matches, 'total': total}
 
 
@@ -273,7 +306,9 @@ def merge_into_master(configured: str, incoming: list[dict]) -> dict:
             raise ExcelError('总表正被占用（可能在 Excel 中打开），请关闭后重试')
         backup = path.with_name(path.stem + '.备份.xlsx')
         try:
-            shutil.copy2(path, backup)
+            # 备份同样去掉已停用的敏感列
+            kept = [h for h in headers if h not in REMOVED_COLUMNS]
+            backup.write_bytes(write_xlsx(kept, [{h: r.get(h, '') for h in kept} for r in existing]))
         except OSError:
             raise ExcelError('无法备份总表，请检查文件夹权限或关闭正在打开的总表')
     stamp = _dt.datetime.now().strftime('%Y-%m-%d %H:%M')

@@ -1,3 +1,4 @@
+import contextlib
 """Windows file-sharing regressions using synthetic documents and held readers."""
 import json
 from pathlib import Path
@@ -45,7 +46,7 @@ class ProgressFileTests(unittest.TestCase):
         def locked(path, *args, **kwargs):
             if path == self.path: raise PermissionError('synthetic sharing violation')
             return original(path, *args, **kwargs)
-        with patch.object(Path, 'write_text', locked), patch('documents.time.sleep'), patch('semantic.classify', return_value={'semanticTags': []}):
+        with patch.object(Path, 'write_text', locked), patch('documents.time.sleep'), contextlib.nullcontext():
             result = recognize_document(str(filename), filename.name, 'balanced', str(self.path))
         self.assertIn('SYNTHETIC AUDIT CONTRACT', result['rawText'])
         self.assertEqual(result['pageCount'], 1)

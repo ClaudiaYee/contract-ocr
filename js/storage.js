@@ -243,7 +243,7 @@ const Storage = (() => {
   async function exportToCSV() {
     const contracts = await getAllContracts();
     const headers = [
-      '项目名称', '签约主体甲方', '签约主体乙方', '签约时间',
+      '项目名称', 'Engagement Code', 'Engagement Code Description', 'Engagement Name', '上传者ID', '签约主体甲方', '签约主体乙方', '签约时间',
       '签约金额(元)', '项目工作内容概述', '交付物', '来源文件', '录入时间',
       '一级行业','二级行业','三级行业','企业规模','业务模式','客户诉求','服务领域','具体服务','涉及系统/技术','服务期限','交付成果整理','项目大区','项目省份','项目城市','EIC','PIC','FIC','原文关键词','自定义标签','项目笔记','上传类别','Tag分析范围','范围定位状态'
     ];
@@ -259,7 +259,7 @@ const Storage = (() => {
     const rows = contracts.map(c => {
       const p=VaultModel.project(c);
       return [
-      c.projectName, c.partyA, c.partyB, c.signDate,
+      c.projectName, c.engagementCode, c.engagementCodeDescription, c.engagementName, c.uploadedByName, c.partyA, c.partyB, c.signDate,
       c.amount, c.content, c.deliverables, c.sourceFile, c.createdAt,
       ...[0,1,2].map(i=>p.industry[i]||''),p.enterpriseSize,p.businessModel,p.need,p.services.join('；'),p.specificTags.join('；'),p.systems.join('；'),p.serviceTerm,p.deliverables.join('；'),...[0,1,2].map(i=>p.region[i]||''),p.eic,p.pic,p.fic||'',p.keywords.join('；'),p.customTags.join('；'),p.notes,c.uploadCategory==='ey-template'?'安永模板类':'其他类合同',p.analysisScope.label,p.analysisScope.status
     ].map(escapeCsv).join(',');});

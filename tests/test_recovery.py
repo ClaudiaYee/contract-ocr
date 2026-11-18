@@ -1,3 +1,4 @@
+import contextlib
 """Failure recovery and data protection, synthetic files only."""
 import concurrent.futures
 import http.server
@@ -37,12 +38,12 @@ class RecoveryTests(unittest.TestCase):
             calls.append(n)
             if n==2:raise ValueError('synthetic damaged page')
             return original(page,n,*args)
-        with patch('semantic.classify',return_value={'semanticTags':[]}),patch('documents.recognize_pdf_page',fail):
+        with contextlib.nullcontext(),patch('documents.recognize_pdf_page',fail):
             result=documents.recognize_document(str(source),source.name,'balanced',str(self.progress))
         self.assertEqual(calls,[1,2,3]);self.assertEqual(result['failedPages'],[2])
         calls=[]
         def fixed(page,n,*args):calls.append(n);return original(page,n,*args)
-        with patch('semantic.classify',return_value={'semanticTags':[]}),patch('documents.recognize_pdf_page',fixed):
+        with contextlib.nullcontext(),patch('documents.recognize_pdf_page',fixed):
             result=documents.recognize_document(str(source),source.name,'balanced',str(self.progress))
         self.assertEqual(calls,[2]);self.assertEqual(result['resumedPages'],2);self.assertEqual(result['failedPages'],[])
         self.assertIn('SYNTHETIC PAGE 2',result['rawText']);self.assertEqual(len(result['pageAudit']),3)
@@ -55,11 +56,11 @@ class RecoveryTests(unittest.TestCase):
                 self.progress.with_suffix('.cancel').write_text('cancel')
                 raise RuntimeError('TASK_CANCELLED')
             return original(page,n,*args)
-        with patch('semantic.classify',return_value={'semanticTags':[]}),patch('documents.recognize_pdf_page',interrupt):
+        with contextlib.nullcontext(),patch('documents.recognize_pdf_page',interrupt):
             with self.assertRaisesRegex(RuntimeError,'TASK_CANCELLED'):documents.recognize_document(str(source),source.name,'balanced',str(self.progress))
         self.assertIsNotNone(PageCheckpoint(self.progress,source.read_bytes(),'balanced').load(1))
         self.progress.with_suffix('.cancel').unlink()
-        with patch('semantic.classify',return_value={'semanticTags':[]}):
+        with contextlib.nullcontext():
             result=documents.recognize_document(str(source),source.name,'balanced',str(self.progress))
         self.assertEqual(result['resumedPages'],1)
     def test_incomplete_checkpoint_is_ignored(self):

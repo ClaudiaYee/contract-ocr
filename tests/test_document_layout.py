@@ -1,3 +1,4 @@
+import contextlib
 """Synthetic page geometry and original retention; never use customer documents."""
 import concurrent.futures
 import http.server
@@ -36,7 +37,7 @@ class DocumentLayoutTests(unittest.TestCase):
         page.insert_text((108, 160), 'Control evaluation', fontsize=12)
         filename = self.root / 'synthetic.pdf'
         pdf.save(filename); pdf.close()
-        with patch('semantic.classify', return_value={'semanticTags': []}):
+        with contextlib.nullcontext():
             result = recognize_document(str(filename), filename.name, 'balanced', str(self.root / 'progress.json'))
         layout = result['layoutPages'][0]
         self.assertEqual((layout['width'], layout['height']), (612, 792))
@@ -52,7 +53,7 @@ class DocumentLayoutTests(unittest.TestCase):
         filename = self.root / 'synthetic.pdf'; pdf.save(filename); pdf.close()
         scale = 220 / 72
         line = {'text': 'SYNTHETIC OCR', 'x0': 72*scale, 'y0': 90*scale, 'x1': 250*scale, 'y1': 110*scale}
-        with patch('semantic.classify', return_value={'semanticTags': []}), patch('engine.recognize_image', return_value={'text': line['text'], 'lines':[line], 'uncertain':[]}):
+        with contextlib.nullcontext(), patch('engine.recognize_image', return_value={'text': line['text'], 'lines':[line], 'uncertain':[]}):
             result = recognize_document(str(filename), filename.name, 'balanced', str(self.root / 'progress.json'))
         actual = result['layoutPages'][0]['lines'][0]
         for key, expected in [('x0',72), ('y0',90), ('x1',250), ('y1',110)]: self.assertAlmostEqual(actual[key], expected)
@@ -64,7 +65,7 @@ class DocumentLayoutTests(unittest.TestCase):
         filename=self.root/'retry.pdf';pdf.save(filename);pdf.close()
         factor=300/72
         line={'text':'RECOVERED CONTENT','score':.95,'x0':72*factor,'y0':90*factor,'x1':400*factor,'y1':115*factor}
-        with patch('semantic.classify',return_value={'semanticTags':[]}), patch('engine.recognize_image',side_effect=[{'text':'','lines':[],'uncertain':[]},{'text':line['text'],'lines':[line],'uncertain':[]}]) as recognize:
+        with contextlib.nullcontext(), patch('engine.recognize_image',side_effect=[{'text':'','lines':[],'uncertain':[]},{'text':line['text'],'lines':[line],'uncertain':[]}]) as recognize:
             result=recognize_document(str(filename),filename.name,'balanced',str(self.root/'progress.json'))
         self.assertEqual(recognize.call_count,2)
         self.assertEqual(recognize.call_args.args[1],'fine')
@@ -80,7 +81,7 @@ class DocumentLayoutTests(unittest.TestCase):
         a=220/72;b=300/72
         initial={'text':'USD 100','score':.6,'x0':72*a,'x1':180*a,'y0':100*a,'y1':106*a}
         refined={'text':'USD 1000','score':.98,'x0':72*b,'x1':180*b,'y0':18*b,'y1':24*b}
-        with patch('semantic.classify',return_value={'semanticTags':[]}),patch('engine.recognize_image',side_effect=[{'text':initial['text'],'lines':[initial],'uncertain':[initial]},{'text':refined['text'],'lines':[refined],'uncertain':[]}]):
+        with contextlib.nullcontext(),patch('engine.recognize_image',side_effect=[{'text':initial['text'],'lines':[initial],'uncertain':[initial]},{'text':refined['text'],'lines':[refined],'uncertain':[]}]):
             result=recognize_document(str(filename),filename.name,'balanced',str(self.root/'progress.json'))
         self.assertEqual(result['rawText'],'USD 100')
         self.assertEqual(result['layoutPages'][0]['lines'][0]['alternatives'],['USD 1000'])

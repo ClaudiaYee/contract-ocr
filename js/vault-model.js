@@ -7,7 +7,7 @@ const VaultModel=(()=>{
  function project(c){
   const whole=c.rawText||'',scope=typeof ContractScope!=='undefined'?ContractScope.resolve(c):{text:whole,status:'full',start:0,end:whole.length,label:'全文分析'},text=scope.text;
   const read=(key,fn)=>typeof AnalysisResults!=='undefined'?AnalysisResults.get(c,key,fn):fn();
-  const facts=read('facts',()=>ContractFacts.analyze(text)),metadata=read('metadata',()=>ContractFacts.analyze(whole)),a=read('content',()=>ServiceContent.analyze(text,facts)),scopeKey=(c.uploadCategory==='ey-template'?'ey-template:':'')+fingerprint(text);
+  const facts=read('facts',()=>ContractFacts.analyze(text)),metadata=read('metadata',()=>ContractFacts.analyze(whole)),a=read('content',()=>ServiceContent.analyze(text,facts)),scopeKey='kw3:'+(c.uploadCategory==='ey-template'?'ey-template:':'')+fingerprint(text);
   const p={name:c.projectName||c.sourceFile||'未命名合同',amount:c.amount==null?'':Number(c.amount)/10000,industry:facts.industry,region:metadata.region,enterpriseSize:facts.enterpriseSize,businessModel:facts.businessModel,serviceTerm:metadata.serviceTerm,systems:labels(a.systems),eic:metadata.eic,pic:metadata.pic,fic:'',services:labels(a.serviceDomains),specificTags:labels(a.services),keywords:labels(a.keywords),customTags:[],need:unique([...facts.needs,...labels(a.goals)]).join('；'),needTags:facts.needs,scope:labels(a.services).join('；'),originalDescription:unique(a.services.map(x=>x.evidence)).join('\n'),deliverables:labels(a.deliverables),notes:''};
   const profile={...c.knowledgeProfile};if(profile.industry?.length===1)profile.industry=ContractFacts.industryPath(profile.industry[0]);
   if(typeof AnalysisResults!=='undefined'&&AnalysisResults.managed(c)&&!AnalysisResults.ready(c)){if(!profile.domainSelectionManual)profile.services=[];if(!profile.specificSelectionManual)profile.specificTags=[];if(!profile.keywordsSelectionManual)profile.keywords=[];}
@@ -24,7 +24,13 @@ const VaultModel=(()=>{
    if(sourceChanged&&!profile.keywordsSelectionManual)profile.keywords=p.keywords;
    profile.specificTags=unique((sourceChanged&&!profile.specificSelectionManual?p.specificTags:profile.specificTags||p.specificTags).map(ServiceContent.cleanTag).filter(Boolean));
   }
-  profile.systems=unique((profile.systems||p.systems).map(ServiceContent.normalizeSystem));
+  // 关键词、服务领域、具体服务不允许手动修改：有合同正文时一律使用自动识别结果（旧版手动修改的值不再生效）。
+  // 只有从 Excel 导入、没有正文的记录保留表格中的关键词。
+  if(text.trim()){profile.keywords=p.keywords;profile.services=p.services;profile.specificTags=p.specificTags;}
+  else if(c.knowledgeProfile?.keywords)profile.keywords=c.knowledgeProfile.keywords;
+  delete profile.keywordsSelectionManual;delete profile.domainSelectionManual;delete profile.specificSelectionManual;
+  // 规则更新后补入新识别的系统名称（手动添加的系统保留）
+  profile.systems=unique([...(profile.systems||p.systems),...(sourceChanged&&!legacy?p.systems:[])].map(ServiceContent.normalizeSystem));
   const needText=profile.need||p.need, normalizedNeeds=typeof AnalysisResults!=='undefined'&&AnalysisResults.managed(c)&&needText===p.need?facts.needs:ContractFacts.analyze('客户诉求：'+needText).needs;
   return {...p,...profile,name:p.name,amount:p.amount,needTags:normalizedNeeds.length?normalizedNeeds:split(needText).filter(v=>v.length<=80),id:c.id,rawText:whole,uploadCategory:c.uploadCategory||'other',analysisScope:scope,analysis:a,factEvidence:facts.evidence,tagSchemaVersion:3,tagSourceFingerprint:scopeKey};
  }
@@ -69,7 +75,7 @@ const VaultModel=(()=>{
   return{direct,related};
  }
  function recordChanges(before,after){
-  const fields=['projectName','partyA','partyB','signDate','amount','content','deliverables','auditPurpose','knowledgeProfile'];
+  const fields=['projectName','partyA','partyB','signDate','amount','content','deliverables','auditPurpose','engagementCode','engagementCodeDescription','engagementName','knowledgeProfile'];
   const changes=fields.filter(k=>JSON.stringify(before[k])!==JSON.stringify(after[k])).map(field=>({field,before:before[field]??null,after:after[field]??null}));
   if(!changes.length)return after;
   return {...after,manualEditHistory:[...(before.manualEditHistory||[]),{at:new Date().toISOString(),changes}]};
@@ -82,12 +88,20 @@ const VaultModel=(()=>{
   return recordChanges(before,{...after,knowledgeProfile:profile,...(after.amount!==before.amount?{amountManuallyEdited:true}:{})});
  }
  function update(c,p){
-  if(p.amount!==''&&(!Number.isFinite(Number(p.amount))||Number(p.amount)<0))throw Error('请输入有效金额');
+  if(p.amount!==undefined&&p.amount!==''&&(!Number.isFinite(Number(p.amount))||Number(p.amount)<0))throw Error('请输入有效金额');
+  const auto=project(c);
+  // 保存时关键词 / 服务领域 / 具体服务始终取自动识别结果，不接受手动值
+  if(auto.analysisScope?.text?.trim()||(!auto.analysisScope&&c.rawText))p={...p,keywords:auto.keywords,services:auto.services,specificTags:auto.specificTags};
   if((p.services||[]).some(v=>!ServiceContent.isDomain(v)))throw Error('请输入明确的业务领域名称；ITGC 等具体服务及客户行业请填入相应分类');
-  if((p.specificTags||[]).some(v=>!ServiceContent.cleanTag(v)))throw Error('具体服务需为明确业务名称，不能是本协议服务等泛化片段');
-  const profile={...p,tagSchemaVersion:3,tagSourceFingerprint:project(c).tagSourceFingerprint};
+  if(!(auto.analysisScope?.text?.trim())&&(p.specificTags||[]).some(v=>!ServiceContent.cleanTag(v)))throw Error('具体服务需为明确业务名称，不能是本协议服务等泛化片段');
+  const profile={...p,tagSchemaVersion:3,tagSourceFingerprint:auto.tagSourceFingerprint};
+  delete profile.keywordsSelectionManual;delete profile.domainSelectionManual;delete profile.specificSelectionManual;
   if(c.knowledgeProfile&&c.knowledgeProfile.tagSchemaVersion!==3)profile.previousTagClassification={version:c.knowledgeProfile.tagSchemaVersion||1,previous:c.knowledgeProfile.previousTagClassification||null,services:c.knowledgeProfile.services||[],specificTags:c.knowledgeProfile.specificTags||[],keywords:c.knowledgeProfile.keywords||[]};delete profile.id;delete profile.rawText;delete profile.analysis;delete profile.factEvidence;delete profile.analysisScope;
-  const prior=project(c);return synchronizeEdit(c,{...c,projectName:p.name,amount:p.amount===''?null:Math.round(Number(p.amount)*1000000)/100,content:p.scope!==prior.scope?p.scope:c.content,deliverables:JSON.stringify(p.deliverables)!==JSON.stringify(prior.deliverables)?(p.deliverables||[]).join('；'):c.deliverables,knowledgeProfile:profile,manualFieldsEditedAt:new Date().toISOString()});
+  // 编辑弹窗不再显示金额：未提供 amount 时保留原值。甲乙方、签约时间、服务目的随同一次保存写回原字段。
+  const identity={};for(const key of ['partyA','partyB','signDate','auditPurpose','engagementCode','engagementCodeDescription','engagementName'])if(typeof p[key]==='string'){identity[key]=p[key];delete profile[key];}
+  if(identity.auditPurpose!==undefined&&identity.auditPurpose!==(c.auditPurpose||'')){identity.auditPurposeNeedsReview=false;identity.auditPurposeEditedAt=Date.now();}
+  const amount=p.amount===undefined?c.amount:p.amount===''?null:Math.round(Number(p.amount)*1000000)/100;if(p.amount===undefined)delete profile.amount;
+  const prior=project(c);return synchronizeEdit(c,{...c,...identity,projectName:p.name,amount,content:p.scope!==prior.scope?p.scope:c.content,deliverables:JSON.stringify(p.deliverables)!==JSON.stringify(prior.deliverables)?(p.deliverables||[]).join('；'):c.deliverables,knowledgeProfile:profile,manualFieldsEditedAt:new Date().toISOString()});
  }
  return{project,search,update,split,synchronizeEdit,matchContract,normalizeSearch,matchesDimension};
 })();
