@@ -358,6 +358,68 @@ const PaddleOCR = (() => {
     });
   }
 
+  // ---------------------------------------------------------------- 去除红色印章
+  // 与 native/stamp_removal.py 相同的规则：只清除"印章形状"（近方/圆、边长≥页面短边 6%）的明显红色像素，
+  // 红色正文（细长的行）和章下的黑字保留。返回 { data, removed }，不修改传入的像素。
+  function removeStampsRGBA(data, w, h) {
+    const n = w * h, red = new Uint8Array(n);
+    let any = false;
+    for (let i = 0, p = 0; i < n; i++, p += 4) {
+      const r = data[p], g = data[p + 1], b = data[p + 2];
+      if (r - Math.max(g, b) > 40 && r >= 110) { red[i] = 1; any = true; }
+    }
+    if (!any) return { data, removed: 0 };
+    const short = Math.min(w, h), cell = Math.max(4, Math.floor(short / 150));
+    const gw = Math.ceil(w / cell), gh = Math.ceil(h / cell), counts = new Uint16Array(gw * gh);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (red[y * w + x]) counts[Math.floor(y / cell) * gw + Math.floor(x / cell)]++;
+    const grid = new Uint8Array(gw * gh), joined = new Uint8Array(gw * gh);
+    for (let i = 0; i < grid.length; i++) grid[i] = counts[i] >= 2 ? 1 : 0;
+    for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) if (grid[y * gw + x])
+      for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+        const ny = y + dy, nx = x + dx;
+        if (ny >= 0 && ny < gh && nx >= 0 && nx < gw) joined[ny * gw + nx] = 1;
+      }
+    const seen = new Uint8Array(gw * gh), regions = [];
+    for (let start = 0; start < joined.length; start++) {
+      if (!joined[start] || seen[start]) continue;
+      const queue = [start]; seen[start] = 1;
+      let gy0 = Infinity, gy1 = -1, gx0 = Infinity, gx1 = -1;
+      while (queue.length) {
+        const c = queue.pop(), y = Math.floor(c / gw), x = c % gw;
+        if (grid[c]) { gy0 = Math.min(gy0, y); gy1 = Math.max(gy1, y); gx0 = Math.min(gx0, x); gx1 = Math.max(gx1, x); }
+        for (let ny = y - 1; ny <= y + 1; ny++) for (let nx = x - 1; nx <= x + 1; nx++) {
+          if (ny < 0 || ny >= gh || nx < 0 || nx >= gw) continue;
+          const k = ny * gw + nx;
+          if (joined[k] && !seen[k]) { seen[k] = 1; queue.push(k); }
+        }
+      }
+      if (gy1 < 0) continue;
+      const y0 = gy0 * cell, y1 = Math.min(h, (gy1 + 1) * cell), x0 = gx0 * cell, x1 = Math.min(w, (gx1 + 1) * cell);
+      const bh = y1 - y0, bw = x1 - x0;
+      if (Math.min(bh, bw) < 0.06 * short || bw / bh < 0.6 || bw / bh > 1.67) continue;
+      let filled = 0;
+      for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) filled += red[y * w + x];
+      if (filled / (bh * bw) > 0.45) continue;
+      regions.push([y0, x0, y1, x1]);
+    }
+    if (!regions.length) return { data, removed: 0 };
+    const out = new Uint8ClampedArray(data);
+    for (const [y0, x0, y1, x1] of regions)
+      for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) if (red[y * w + x]) { const p = (y * w + x) * 4; out[p] = out[p + 1] = out[p + 2] = 255; }
+    return { data: out, removed: regions.length };
+  }
+
+  function withoutStamps(src) {
+    const w = src.naturalWidth || src.videoWidth || src.width, h = src.naturalHeight || src.videoHeight || src.height;
+    if (!w || !h) return { src, removed: 0 };
+    const c = makeCanvas(w, h), ctx = c.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(src, 0, 0, w, h);
+    const image = ctx.getImageData(0, 0, w, h), result = removeStampsRGBA(image.data, w, h);
+    if (!result.removed) { c.width = c.height = 0; return { src, removed: 0 }; }
+    image.data.set(result.data); ctx.putImageData(image, 0, 0);
+    return { src: c, removed: result.removed };
+  }
+
   /**
    * 识别一张图片（canvas / image / ImageBitmap）
    * @returns {Promise<{text:string, lines:Array<{text,x0,y0,x1,y1}>, items:Array}>}
@@ -368,6 +430,8 @@ const PaddleOCR = (() => {
     options.signal?.throwIfAborted();
     DET.maxSide = ({ fast: 1280, balanced: 1920, fine: 2560 })[options.mode] || 1920;
     await new Promise(resolve => setTimeout(resolve, 0));
+    const cleaned = withoutStamps(src);
+    src = cleaned.src;
     const boxes = await detect(src);
     options.signal?.throwIfAborted();
     const items = [];
@@ -391,7 +455,7 @@ const PaddleOCR = (() => {
       if (onProgress && (i % 3 === 0 || i === boxes.length - 1)) onProgress((i + 1) / boxes.length);
     }
     const lines = linesToText(items);
-    return { text: lines.map(l => l.text).join('\n'), lines, items };
+    return { text: lines.map(l => l.text).join('\n'), lines, items, stampsRemoved: cleaned.removed };
   }
 
   // InferenceSession and DET settings are shared: never run them concurrently.
@@ -407,6 +471,7 @@ const PaddleOCR = (() => {
     init,
     recognize,
     isReady: () => !!(det && rec && chars),
+    _removeStampsRGBA: removeStampsRGBA,
     _params: { DET, REC }
   };
 })();
