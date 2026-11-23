@@ -3,14 +3,16 @@
 #   powershell -ExecutionPolicy Bypass -File tools\build_windows.ps1
 # 可选参数：
 #   -Mirror          国内网络：pip 使用清华镜像
-#   -RefreshModels   重新下载模型（默认已下载过就跳过）
+#   -RefreshModels   （本版本不下载模型，保留兼容）
+#   -TesseractDir    Tesseract 5 安装目录（默认 C:\Program Files\Tesseract-OCR），需含 chi_sim 与 eng 语言包
 #   -SkipSmokeTest   跳过打包后的 EXE 自检（更快）
 #   -NoZip           只生成 dist\ContractOCR 文件夹，不压缩 zip
 param(
     [switch]$Mirror,
     [switch]$RefreshModels,
     [switch]$SkipSmokeTest,
-    [switch]$NoZip
+    [switch]$NoZip,
+    [string]$TesseractDir = $(if ($env:CONTRACT_OCR_TESSERACT_DIR) { $env:CONTRACT_OCR_TESSERACT_DIR } else { 'C:\Program Files\Tesseract-OCR' })
 )
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $PSScriptRoot
@@ -57,33 +59,46 @@ Run $bp (@('-m', 'pip', 'install', '-r', 'requirements-native.txt', 'pyinstaller
 
 Step '3/8 （语义模型已移除，无需准备）'
 
-Step '4/8 准备 PP-OCRv5 OCR 模型（单独环境 .venv-models）'
-if (-not (Test-Path '.venv-models\Scripts\python.exe')) { Run $pyExe ($pyArgs + @('-m', 'venv', '.venv-models')) }
-$mp = (Resolve-Path '.venv-models\Scripts\python.exe').Path
-if ($RefreshModels -or -not (Test-Path 'models\ocr_models\ppocrv5_rec_server.onnx')) {
-    Run $mp (@('-m', 'pip', 'install', 'rapidocr==3.8.4', 'onnxruntime') + $pipMirror)
-    Run $mp @('native\fetch_ocr_models.py')
-} else { Write-Host '已存在，跳过下载。' }
+Step '4/8 准备 Tesseract OCR（从本机安装目录复制 tesseract.exe、运行库和语言包）'
+$tessExe = Join-Path $TesseractDir 'tesseract.exe'
+if (-not (Test-Path $tessExe)) {
+    throw "没有找到 $tessExe。请先安装 Windows 版 Tesseract 5（UB Mannheim 构建：https://github.com/UB-Mannheim/tesseract/wiki），安装时在 Additional language data 中勾选 Chinese (Simplified)；或用 -TesseractDir 指定安装目录。"
+}
+foreach ($lang in 'chi_sim', 'eng') {
+    if (-not (Test-Path (Join-Path $TesseractDir "tessdata\$lang.traineddata"))) {
+        throw "Tesseract 缺少语言包 $lang.traineddata。请重新运行 Tesseract 安装程序并勾选 Chinese (Simplified)，或把 $lang.traineddata 放到 $TesseractDir\tessdata。"
+    }
+}
+$tessBundle = Join-Path $Root 'build\tesseract'
+if (Test-Path $tessBundle) { Remove-Item $tessBundle -Recurse -Force }
+New-Item -ItemType Directory -Force (Join-Path $tessBundle 'tessdata') | Out-Null
+Copy-Item $tessExe $tessBundle
+Get-ChildItem $TesseractDir -Filter '*.dll' | Copy-Item -Destination $tessBundle
+foreach ($lang in 'chi_sim', 'eng', 'osd') {
+    $data = Join-Path $TesseractDir "tessdata\$lang.traineddata"
+    if (Test-Path $data) { Copy-Item $data (Join-Path $tessBundle 'tessdata') }
+}
+if (Test-Path (Join-Path $TesseractDir 'LICENSE')) { Copy-Item (Join-Path $TesseractDir 'LICENSE') (Join-Path $tessBundle 'LICENSE-tesseract.txt') }
 
-Step '5/8 生成 int8 检测模型（失败也不影响，程序会用原始检测模型）'
-try {
-    Run $mp (@('-m', 'pip', 'install', 'onnx', 'sympy', 'rapidocr_onnxruntime==1.4.4') + $pipMirror)
-    Run $mp @('tools\quantize_ocr.py', 'models\ocr_models', '--det-only')
-} catch { Write-Warning "int8 检测模型未生成：$($_.Exception.Message)" }
+Step '5/8 （Tesseract 版：无需生成 int8 模型）'
 
-Step '6/8 检查 OCR 模型能正常加载'
+Step '6/8 检查打包用的 Tesseract 能读中文合同文字'
+$env:CONTRACT_OCR_TESSERACT = Join-Path $tessBundle 'tesseract.exe'
 Run $bp @('native\check_ocr_models.py')
+Remove-Item Env:\CONTRACT_OCR_TESSERACT
 
 Step '7/8 用 PyInstaller 打包'
 Run $bp @('native\make_version_info.py', 'version_info.txt')
-$hidden = 'documents engine stamp_removal analysis_scope page_quality layout_quality recovery ocr_cache text_normalize date_review ocr_dictionary excel_table fulltext_index'.Split(' ')
+$hidden = 'documents engine pytesseract stamp_removal analysis_scope page_quality layout_quality recovery ocr_cache text_normalize date_review ocr_dictionary excel_table fulltext_index'.Split(' ')
 $piArgs = @('-m', 'PyInstaller', '--noconfirm', '--clean', '--onedir', '--name', 'ContractOCR',
     '--version-file', 'version_info.txt', '--noupx', '--paths', 'native')
 foreach ($m in $hidden) { $piArgs += @('--hidden-import', $m) }
-foreach ($p in 'rapidocr_onnxruntime onnxruntime pyclipper shapely pymupdf'.Split(' ')) { $piArgs += @('--collect-all', $p) }
-$piArgs += @('--add-data', 'models/ocr_models;ocr_models',
+foreach ($p in 'pymupdf'.Split(' ')) { $piArgs += @('--collect-all', $p) }
+# 打包环境里可能还装着旧版本用过的 PP-OCR 运行库；明确排除，安装包只含 Tesseract。
+foreach ($x in 'rapidocr_onnxruntime rapidocr onnxruntime'.Split(' ')) { $piArgs += @('--exclude-module', $x) }
+$piArgs += @('--add-data', 'build/tesseract;tesseract',
     '--add-data', 'index.html;web', '--add-data', 'js;web/js', '--add-data', 'css;web/css',
-    '--add-data', 'assets;web/assets', '--add-data', 'lib;web/lib', 'native/desktop.py')
+    '--add-data', 'assets;web/assets', '--add-data', 'lib/pdfjs;web/lib/pdfjs', 'native/desktop.py')
 Run $bp $piArgs
 $exe = Join-Path $Root 'dist\ContractOCR\ContractOCR.exe'
 if (-not (Test-Path $exe)) { throw '打包结束但没有找到 dist\ContractOCR\ContractOCR.exe' }
@@ -113,7 +128,7 @@ if (-not $SkipSmokeTest) {
 } else { Write-Host '已跳过 EXE 自检。' }
 Copy-Item 'README.md' 'dist\ContractOCR\README.md' -Force
 if (-not $NoZip) {
-    $zip = Join-Path $Root 'ContractOCR-Assistant-Windows-x64.zip'
+    $zip = Join-Path $Root 'ContractOCR-Assistant-Tesseract-Windows-x64.zip'
     if (Test-Path $zip) { Remove-Item $zip -Force }
     Compress-Archive -Path 'dist\ContractOCR' -DestinationPath $zip
     $hash = (Get-FileHash $zip -Algorithm SHA256).Hash

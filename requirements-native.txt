@@ -1,5 +1,5 @@
-rapidocr-onnxruntime==1.4.4
-onnxruntime>=1.20,<2
+# 小秘书 Tesseract 版：OCR 用 Tesseract 5（pytesseract 调用随程序打包的 tesseract.exe）
+pytesseract==0.3.13
 numpy>=1.26,<3
 Pillow>=10,<14
 

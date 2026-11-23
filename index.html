@@ -61,7 +61,7 @@
             <div><h2 id="myContractsTitle">我的合同</h2></div>
           <div class="view-actions">
             <input type="search" id="searchInput" placeholder="筛选项目/甲方/乙方/关键词/全文..." class="search-input">
-            <select id="ocrMode" class="ocr-mode" aria-label="识别模式（对随后上传的文件生效）" title="识别模式，对随后上传的文件生效；小字遗漏时可切换精细模式重新识别"><option value="fast">快速识别</option><option value="balanced" selected>均衡识别（推荐）</option><option value="fine">精细识别（手写日期 / 签字页，较慢）</option></select>
+            <select id="ocrMode" class="ocr-mode" aria-label="识别模式（对随后上传的文件生效）" title="Tesseract 识别模式，对随后上传的文件生效；小字遗漏时可切换精细模式重新识别"><option value="fast">快速识别</option><option value="balanced" selected>均衡识别（推荐）</option><option value="fine">精细识别（300 dpi，较慢）</option></select>
             <button class="btn btn-primary" id="uploadBtn" type="button" disabled title="选择 PDF 或图片识别合同，可按 Ctrl / Shift 多选；也可以把文件拖到「我的合同」区域">上传合同</button>
             <input type="file" id="fileInput" disabled accept=".pdf,application/pdf,image/png,image/jpeg,image/webp,image/bmp" multiple hidden>
             <button class="btn btn-ghost" id="importBtn" type="button" title="导入系统设置中导出的 JSON 备份">导入备份</button>

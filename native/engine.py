@@ -1,90 +1,103 @@
-"""OCR engine functions in an importable module for frozen multiprocessing.
+"""OCR engine for the Tesseract edition (小秘书 Tesseract 版), in an importable module for frozen multiprocessing.
 
-Whole pages are always read by the bundled PP-OCRv4 mobile detector + recognizer. Measured on
-scan-like contract pages (v2.14.3): v4 makes only punctuation-width slips, while the
-PP-OCRv5 *mobile* recognizer drops common characters (月 日 行 工 用 金 至 广 子), so it is
-not used. The PP-OCRv5 *server* recognizer read every test line correctly (incl. SOC2,
-ISO 27001:2022, 180,000.00) but needs ~2 s per line and ~260 s per page on CPU, so it only
-re-reads a few short key lines per page (dates, amounts, codes, low confidence):
-  fast     v4, 160 dpi, no key-line review
-  balanced v4, 220 dpi (server review measured +10 s/page with no gain on printed text)
-  fine     v4, 300 dpi, up to 6 key lines per page via PP-OCRv5 server (handwriting)
+Pages and images are read by Tesseract 5 (LSTM, chi_sim + eng) through pytesseract, the OCR route of the
+PDF skill. The public functions keep the PP-OCR engine's interface, so the document pipeline, checkpoints,
+cache keys and stamp removal work unchanged:
+
+* Tesseract puts spaces between Chinese characters; they are removed (spaces stay only between Latin
+  letters / digits), otherwise keyword rules would not match (信 息 系 统 -> 信息系统).
+* There is no second recognizer, so the fine-mode key-line review and the three-model date vote are off
+  (server_available() / date_vote_available() return False).
+* Measured on the synthetic 6-page contract set: 92.6% character accuracy vs 99.6% for PP-OCRv4 with
+  stamp removal; dates, amounts and table cells are the most frequent misses. Check key fields.
 """
 from pathlib import Path
 import io
 import os
 import re
+import shutil
 import sys
 import time
 
-ENGINE = None          # Kept for compatibility: the page engine once loaded.
-ENGINES = {}
-MODEL_ROOT = Path(os.environ.get('CONTRACT_OCR_MODEL_DIR', str(Path(sys._MEIPASS) / 'ocr_models' if getattr(sys, 'frozen', False) else Path(__file__).resolve().parent.parent / 'models' / 'ocr_models')))
-FILES = {'rec_server': 'ppocrv5_rec_server.onnx', 'rec_mobile': 'ppocrv5_rec_mobile.onnx', 'keys': 'ppocrv5_dict.txt'}
-# int8 PP-OCRv4 detector (built and accuracy-checked at build time). Measured: same text as
-# the original detector on the degraded test set, ~22% less time per page. Recognition stays
-# fp32: the int8 recognizer misread characters (睿->容, ISO->/S0).
-INT8_DET = 'ppocrv4_det_int8.onnx'
+LANG = 'chi_sim+eng'
+TESSERACT_LABEL = 'Tesseract 5 (chi_sim+eng)'
+ENGINES = {}           # kept for interface compatibility
+FILES = {}             # no model files of our own: Tesseract brings its tessdata
+MODEL_ROOT = Path(sys._MEIPASS) / 'tesseract' if getattr(sys, 'frozen', False) else Path(__file__).resolve().parent.parent / 'models' / 'tesseract'
+INT8_DET = None
+KEY_LINES = {'fast': 0, 'balanced': 0, 'fine': 0}
+LABELS = {'tesseract': TESSERACT_LABEL, 'v4': TESSERACT_LABEL, 'v5-server': TESSERACT_LABEL, 'date-vote': TESSERACT_LABEL}
+TEXT_SCORE = 0.15
+UNCERTAIN = 0.7       # Tesseract word confidences run lower than PP-OCR scores
+_CMD = None
 
 
 def int8_detector():
-    path = MODEL_ROOT / INT8_DET
-    return path if path.is_file() and os.environ.get('CONTRACT_OCR_INT8_DET', '1') != '0' else None
-KEY_LINES = {'fast': 0, 'balanced': 0, 'fine': 6}
-LABELS = {'v4': 'PP-OCRv4 mobile', 'v5-server': 'PP-OCRv5 server 关键行复核', 'date-vote': '日期三模型复核'}
-# Lines below this score were silently dropped before (0.3). Faint handwriting such as a
-# signed date often scores low, so keep it and mark it for review instead of losing it.
-TEXT_SCORE = 0.15
+    return None
+
+
+def server_available():
+    return False
+
+
+def date_vote_available():
+    return False
+
+
+def tesseract_command():
+    """Bundled tesseract.exe (packaged app) > CONTRACT_OCR_TESSERACT > PATH > default Windows install."""
+    global _CMD
+    if _CMD:
+        return _CMD
+    candidates = [MODEL_ROOT / ('tesseract.exe' if os.name == 'nt' else 'tesseract'), os.environ.get('CONTRACT_OCR_TESSERACT'),
+                  shutil.which('tesseract'), r'C:\Program Files\Tesseract-OCR\tesseract.exe']
+    for candidate in candidates:
+        if candidate and Path(candidate).is_file():
+            _CMD = str(candidate)
+            tessdata = Path(_CMD).parent / 'tessdata'
+            if (tessdata / 'chi_sim.traineddata').is_file():
+                os.environ['TESSDATA_PREFIX'] = str(tessdata)
+            return _CMD
+    raise RuntimeError('未找到 Tesseract OCR 引擎（tesseract.exe）。请重新安装本程序，或联系管理员。')
+
+
+def _pytesseract():
+    import pytesseract
+    pytesseract.pytesseract.tesseract_cmd = tesseract_command()
+    os.environ['OMP_THREAD_LIMIT'] = str(thread_count())   # Tesseract's own threads per worker process
+    return pytesseract
+
+
+def tesseract_version():
+    try:
+        return str(_pytesseract().get_tesseract_version())
+    except Exception:
+        return 'unknown'
 
 
 def model_tag(mode):
     """Model set a mode uses on this installation; part of cache/checkpoint keys."""
-    tag = 'v4+v5server' if KEY_LINES.get(mode, 2) and server_available() else 'v4'
-    tag += '+int8det' if int8_detector() else ''
-    return tag + '+datevote' if mode != 'fast' and date_vote_available() else tag
-
-
-def server_available():
-    return (MODEL_ROOT / FILES['rec_server']).is_file() and (MODEL_ROOT / FILES['keys']).is_file()
-
-
-def date_vote_available():
-    return all((MODEL_ROOT / FILES[name]).is_file() for name in ('rec_server', 'rec_mobile', 'keys'))
-
-
-def _guard():
-    # No telemetry, downloads or cloud inference. Development/test workers prohibit network calls.
-    if sys.platform.startswith('linux'):
-        sys.path.insert(0, str(Path(__file__).parent))
-        import offline_guard  # noqa: F401
-    import onnxruntime as ort
-    ort.disable_telemetry_events()
+    return 'tesseract-' + re.sub(r'[^0-9A-Za-z.]+', '', tesseract_version()) + '-' + LANG
 
 
 def engine_for(mode):
-    return 'v4', _build('v4')
+    return 'tesseract', _pytesseract()
 
 
-def _build(tag):
-    global ENGINE
-    if tag not in ENGINES:
-        _guard()
-        from rapidocr_onnxruntime import RapidOCR
-        options = dict(intra_op_num_threads=thread_count(), inter_op_num_threads=1, rec_batch_num=6, max_side_len=4200)
-        if tag == 'v4' and int8_detector():
-            options.update(det_model_path=str(int8_detector()))
-        if tag in ('v5-server', 'v5-mobile'):
-            rec = 'rec_server' if tag == 'v5-server' else 'rec_mobile'
-            options.update(rec_model_path=str(MODEL_ROOT / FILES[rec]), rec_keys_path=str(MODEL_ROOT / FILES['keys']))
-        ENGINES[tag] = RapidOCR(**options)
-        if ENGINE is None:
-            ENGINE = ENGINES[tag]
-    return ENGINES[tag]
+def initialize_engine():
+    _pytesseract().get_tesseract_version()
+
+
+def thread_count():
+    try:
+        value = int(os.environ.get('CONTRACT_OCR_THREADS', '0'))
+    except ValueError:
+        value = 0
+    return value if 1 <= value <= 8 else max(1, min(2, (os.cpu_count() or 2) // 2))
 
 
 # Letter/digit confusions inside one Latin/number token, e.g. S0C2 -> SOC2, IS0 -> ISO,
-# 18O,000 -> 180,000, Page 1l -> Page 11, 180.000.00 -> 180,000.00. Codes such as V50,
-# W70 or B8650 are untouched because their 0 follows a digit.
+# 18O,000 -> 180,000, Page 1l -> Page 11, 180.000.00 -> 180,000.00.
 def fix_confusables(text):
     def token(match):
         value = match.group(0)
@@ -94,42 +107,112 @@ def fix_confusables(text):
         value = re.sub(r'(?<=\d)[lI](?=\d|$)', '1', value)
         return value
     text = re.sub(r'[A-Za-z0-9]+', token, str(text))
-    text = re.sub(r'(?<![A-Za-z])IS0(?=\s?\d{4,5})', 'ISO', text)  # IS027001 -> ISO27001
+    text = re.sub(r'(?<![A-Za-z])IS0(?=\s?\d{4,5})', 'ISO', text)
     text = re.sub(r'(?<!\d)(\d{1,3})((?:\.\d{3})+)\.(\d{2})(?!\d)', lambda m: m.group(1) + m.group(2).replace('.', ',') + '.' + m.group(3), text)
     text = re.sub(r'(?<=\d)[Oo](?=[,.]\d)|(?<=[\d,])[Oo](?=\d)', '0', text)
-    # Full-width punctuation inside numbers: 27001：2022 -> 27001:2022, 180，000 -> 180,000.
     text = re.sub(r'(?<=\d)：(?=\d)', ':', text)
     return re.sub(r'(?<=\d)，(?=\d{3}(?!\d))', ',', text)
 
 
+_LATIN = re.compile(r'[A-Za-z0-9]')
+
+
+def join_words(words, boxes=None):
+    """Join Tesseract words of one line: a space between two Latin/number words, or where there is a
+    real gap (table columns, label/value); Chinese characters of one phrase are joined without spaces."""
+    out = ''
+    for i, word in enumerate(words):
+        if out:
+            gap = False
+            if boxes:
+                (px, _, pw, ph), (x, _, _, h) = boxes[i - 1], boxes[i]
+                gap = x - (px + pw) > 0.9 * max(ph, h)
+            if gap or (_LATIN.match(word[0]) and _LATIN.match(out[-1])):
+                out += ' '
+        out += word
+    return out
+
+
+def _lines_from_data(data, scale=1.0):
+    groups = {}
+    for i, word in enumerate(data['text']):
+        word = str(word).strip()
+        try:
+            conf = float(data['conf'][i])
+        except (TypeError, ValueError):
+            conf = -1
+        if not word or conf < 0:
+            continue
+        key = (data['block_num'][i], data['par_num'][i], data['line_num'][i])
+        x, y, w, h = (data[k][i] / scale for k in ('left', 'top', 'width', 'height'))
+        g = groups.setdefault(key, {'words': [], 'boxes': [], 'confs': [], 'x0': x, 'y0': y, 'x1': x + w, 'y1': y + h})
+        g['words'].append(word); g['boxes'].append((x, y, w, h)); g['confs'].append(conf)
+        g['x0'] = min(g['x0'], x); g['y0'] = min(g['y0'], y); g['x1'] = max(g['x1'], x + w); g['y1'] = max(g['y1'], y + h)
+    items = []
+    for g in groups.values():
+        raw = join_words(g['words'], g['boxes'])
+        if not raw.strip():
+            continue
+        score = sum(g['confs']) / len(g['confs']) / 100
+        if score < TEXT_SCORE:
+            continue
+        fixed = fix_confusables(raw)
+        items.append({'text': fixed, **({'ocrRaw': raw} if fixed != raw else {}), 'score': round(score, 4), 'x0': g['x0'], 'y0': g['y0'], 'x1': g['x1'], 'y1': g['y1']})
+    return items
+
+
+def _to_rgb_image(content):
+    import numpy as np
+    from PIL import Image, ImageOps
+    if isinstance(content, np.ndarray):
+        if content.shape[0] * content.shape[1] > 32_000_000:
+            raise ValueError('图片超过3200万像素，请降低分辨率')
+        return content
+    Image.MAX_IMAGE_PIXELS = 32_000_000
+    with Image.open(io.BytesIO(content)) as source:
+        if source.width * source.height > 32_000_000:
+            raise ValueError('图片超过3200万像素，请降低分辨率')
+        image = ImageOps.exif_transpose(source).convert('RGB')
+        return np.asarray(image)[:, :, ::-1].copy()   # BGR, like PyMuPDF pages
+
+
+def recognize_image(content, mode: str):
+    import numpy as np
+    from PIL import Image
+    tess = _pytesseract()
+    started = time.perf_counter()
+    array = _to_rgb_image(content)
+    # 去除红色公章 / 合同专用章（只处理印章形状的红色区域，红色正文保留）
+    from stamp_removal import remove_stamps
+    array, stamps_removed = remove_stamps(array)
+    image = Image.fromarray(np.ascontiguousarray(array[:, :, ::-1]))
+    data = tess.image_to_data(image, lang=LANG, config='--oem 1 --psm 3', output_type=tess.Output.DICT)
+    items = _lines_from_data(data)
+    from layout_quality import group_rows
+    rows = group_rows(items)
+    items = [item for row in rows for item in row]
+    return {'text': '\n'.join(' '.join(item['text'] for item in row) for row in rows), 'lines': items, 'items': items,
+            'seconds': round(time.perf_counter() - started, 3), 'engine': 'native', 'ocrModel': TESSERACT_LABEL, 'stampsRemoved': stamps_removed,
+            'uncertain': [item for item in items if item['score'] < UNCERTAIN]}
+
+
 def read_crops(tag, crops):
-    """Recognition only (no detection) of single-line crops with one model: 'v4', 'v5-mobile' or 'v5-server'."""
+    """Single-line crops (BGR arrays) -> [(text, score)] with Tesseract's single-line mode."""
     if not crops:
         return []
-    results, _ = _build(tag).text_rec(list(crops))
-    return [(fix_confusables(text), float(score)) for text, score in results]
+    import numpy as np
+    from PIL import Image
+    tess = _pytesseract()
+    out = []
+    for crop in crops:
+        data = tess.image_to_data(Image.fromarray(np.ascontiguousarray(crop[:, :, ::-1])), lang=LANG, config='--oem 1 --psm 7', output_type=tess.Output.DICT)
+        items = _lines_from_data(data)
+        out.append((join_words([i['text'] for i in items]), sum(i['score'] for i in items) / len(items) if items else 0.0))
+    return out
 
 
 def recognize_lines(crops):
-    """PP-OCRv5 server recognition of short single-line crops (BGR arrays) -> [(text, score)]."""
-    if not crops:
-        return []
-    engine = _build('v5-server')
-    results, _ = engine.text_rec([crop for crop in crops])
-    return [(fix_confusables(text), float(score)) for text, score in results]
-
-
-def initialize_engine():
-    engine_for('balanced')
-
-
-def thread_count():
-    # The service splits CPU cores between its OCR worker processes (set before spawn).
-    try:
-        value = int(os.environ.get('CONTRACT_OCR_THREADS', '0'))
-    except ValueError:
-        value = 0
-    return value if 1 <= value <= 8 else max(1, min(2, (os.cpu_count() or 2) // 2))
+    return read_crops('tesseract', crops)
 
 
 def pixmap_array(pixmap):
@@ -141,45 +224,3 @@ def pixmap_array(pixmap):
     if channels == 1:
         array = np.repeat(array, 3, axis=2)
     return np.ascontiguousarray(array[:, :, 2::-1])
-
-
-def recognize_image(content, mode: str):
-    import numpy as np
-    from PIL import Image, ImageOps
-    tag, engine = engine_for(mode)
-    started = time.perf_counter()
-    if isinstance(content, np.ndarray):
-        # Already BGR pixels rendered by PyMuPDF; identical pixels to the old PPM route.
-        if content.shape[0] * content.shape[1] > 32_000_000:
-            raise ValueError('图片超过3200万像素，请降低分辨率')
-        array = content
-    else:
-        Image.MAX_IMAGE_PIXELS = 32_000_000
-        with Image.open(io.BytesIO(content)) as source:
-            if source.width * source.height > 32_000_000:
-                raise ValueError('图片超过3200万像素，请降低分辨率')
-            image = ImageOps.exif_transpose(source).convert('RGB')
-            # RapidOCR numpy inputs use BGR; compositing is handled by the browser canvas.
-            array = np.asarray(image)[:, :, ::-1].copy()
-    # 去除红色公章 / 合同专用章（只处理印章形状的红色区域，红色正文保留），避免印章压字导致整行漏识别
-    from stamp_removal import remove_stamps
-    array, stamps_removed = remove_stamps(array)
-    longest = {'fast': 1280, 'balanced': 1920, 'fine': 2560}.get(mode, 1920)
-    from rapidocr_onnxruntime.ch_ppocr_det.utils import DetPreProcess
-    detector = engine.text_det
-    detector.get_preprocess = lambda _: DetPreProcess(longest, 'max', detector.mean, detector.std)
-    result, _ = engine(array, use_cls=False, text_score=TEXT_SCORE)
-    items = []
-    for box, text, confidence in result or []:
-        if not str(text).strip():
-            continue
-        xs, ys = [float(p[0]) for p in box], [float(p[1]) for p in box]
-        fixed = fix_confusables(text)
-        items.append({'text': fixed, **({'ocrRaw': text} if fixed != text else {}), 'score': float(confidence), 'x0': min(xs), 'y0': min(ys), 'x1': max(xs), 'y1': max(ys)})
-    # Same visual line = one row, read left to right (PP-OCRv5 detects word-level boxes).
-    from layout_quality import group_rows
-    rows = group_rows(items)
-    items = [item for row in rows for item in row]
-    return {'text': '\n'.join(' '.join(item['text'] for item in row) for row in rows), 'lines': items, 'items': items,
-            'seconds': round(time.perf_counter() - started, 3), 'engine': 'native', 'ocrModel': LABELS[tag], 'stampsRemoved': stamps_removed,
-            'uncertain': [item for item in items if item['score'] < .8]}

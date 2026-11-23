@@ -1,3 +1,12 @@
+## 秘书端 · Tesseract 版（feature/assistant-tesseract）
+
+本分支把 PP-OCR 换成 Tesseract 5（pytesseract，chi_sim+eng），其余功能与秘书端相同；识别前仍会去除红色印章。
+
+- 打包机需先安装 Tesseract 5（UB Mannheim Windows 版，安装时勾选 Chinese (Simplified)），默认路径 `C:\Program Files\Tesseract-OCR`；其他路径用 `-TesseractDir` 或环境变量 `CONTRACT_OCR_TESSERACT_DIR` 指定。
+- 打包命令：`powershell -ExecutionPolicy Bypass -File tools\build_windows.ps1`，脚本会把 tesseract.exe、DLL 与 chi_sim/eng/osd 语言包放进安装包，并用 `native/check_ocr_models.py` 自检。
+- 产物：`ContractOCR-Assistant-Tesseract-Windows-x64.zip`，使用者电脑无需另装 Tesseract。
+- 合成样本实测：字符准确率约 94.8%、关键字段 36/41（PP-OCR 版为 99.6%、41/41），扫描件结果需人工核对。
+
 ## v2.15.0 编辑弹窗、上传者ID、单一上传口、精简页面
 - **上传识别**：只保留一个「合同上传口」（全文分析），移除安永模板类上传口；以前按安永模板上传的合同仍按原口径显示和分析。原「合同列表」改名为「我的合同」，放在上传识别页下方（筛选、导出 / 导入 Excel、下载示例合同、合并到云盘总表、清空），侧栏不再单独显示。
 - **编辑弹窗**：侧栏移除「合同整理与标签管理」。上传结果卡片、我的合同、合同检索、合同详情里的「编辑」都打开同一个弹窗，原整理页的行业、区域、EIC/PIC/FIC、服务范围、交付成果、Tag 分类等都在其中；原「编辑合同信息」的甲方、乙方、签约时间、服务目的并入同一次保存。合同信息去除金额和企业规模（保存时原金额不变）；「关键词」可回车添加自定义关键词，「从全文提取」时保留自定义关键词；「系统」改为可自定义添加的标签。

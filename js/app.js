@@ -250,7 +250,7 @@ const App = (() => {
   const MAX_JOBS = 2;
   function handleFiles(files, uploadCategory='other') {
     const mode = document.getElementById('ocrMode').value;
-    if (typeof NativeDocuments === 'undefined' || !NativeDocuments.available()) showToast('当前是浏览器备用版：单线程识别、较慢，且不使用多进程提速和 PP-OCRv5 手写模型。请双击 ContractOCR.exe 使用原生版。', 'warning');
+    if (typeof NativeDocuments === 'undefined' || !NativeDocuments.available()) showToast('当前是浏览器备用版：单线程识别、较慢，且不使用多进程提速和 Tesseract。请双击 ContractOCR.exe 使用原生版。', 'warning');
     for (const file of files) {
       if (!(/\.pdf$/i.test(file.name) || /^image\//.test(file.type))) continue;
       const card = createResultCard(file, jobs.length, jobs.length + 1, uploadCategory);

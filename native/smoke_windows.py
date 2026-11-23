@@ -78,7 +78,7 @@ def main():
             assert all(len(result['pageAudit']) == result['pageCount'] for result in results)
             assert all(result['layoutPages'][0]['lines'] for result in results)
             assert all(result.get('peakWorkerMemoryMB',0)>0 for result in results)
-            assert all('PP-OCRv4' in (result.get('ocrModel') or '') for result in results), [r.get('ocrModel') for r in results]
+            assert all('Tesseract' in (result.get('ocrModel') or '') for result in results), [r.get('ocrModel') for r in results]
             for result in results:
                 assert request('/api/source/' + result['id'], headers={'X-OCR-Token': token}) == data
             # Exercise packaged cancellation with a synthetic multi-page job.
@@ -136,7 +136,7 @@ def main():
             resumed=wait_for(resume_id,'done',limit=720)['result']
             assert resumed['resumedPages']>=1,resumed
             assert not resumed['failedPages']
-            # PP-OCRv5 may omit spaces between English words; count words, not exact spacing.
+            # OCR may change spaces between English words; count words, not exact spacing.
             assert re.sub(r'\s+','',resumed['rawText']).upper().count('AUDITCONTRACT')>=8, resumed['rawText'][:600]
             all_contracts=json.loads(request('/api/contracts'))
             assert any(c.get('reviewerNotes')=='SYNTHETIC NOTE KEEP' for c in all_contracts)

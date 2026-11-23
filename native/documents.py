@@ -33,7 +33,6 @@ def progress(path, current, total, phase):
 
 
 def recognize_document(input_path, filename, mode, progress_path, upload_category='other'):
-    import pymupdf as fitz
     from engine import recognize_image
     check_cancelled(progress_path)
     data = Path(input_path).read_bytes()
@@ -63,6 +62,7 @@ def recognize_document(input_path, filename, mode, progress_path, upload_categor
         page_audit[0]['seconds']=round(time.perf_counter()-started,3)
         page_audit[0]['ocrModels']=[result['ocrModel']] if result.get('ocrModel') else []
         return {'ocrModel':result.get('ocrModel'),'failedPages':[],'resumedPages':0,'peakWorkerMemoryMB':peak_memory_mb(),'pageAudit': page_audit, 'layoutPages': layout, 'rawText': result['text'], 'pageCount': 1, 'ocrUsed': True, 'reviewNotes': notes, 'engine': 'native', 'workerPid': os.getpid(), 'seconds': time.perf_counter() - started, 'semanticTags':[], 'analysisStatus':'queued'}
+    import pymupdf as fitz
     from recovery import PageCheckpoint,peak_memory_mb
     checkpoint=PageCheckpoint(progress_path,data,mode)
     outcomes=[]
