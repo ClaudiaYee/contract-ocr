@@ -150,6 +150,8 @@
 
 > **小秘书版（分支 `feature/assistant-edition`）**：功能与主版本相同，但没有「系统设置」页。云盘总表固定使用内置路径（`native/desktop.py` 中的 `DEFAULT_CLOUD_PATH`），路径不在页面、配置接口或提示信息中出现，也不能从页面修改；上传者ID 固定为本机账户名。需要修改云盘位置时改 `DEFAULT_CLOUD_PATH` 后重新打包。打包结果为 `ContractOCR-Assistant-Windows-x64.zip`。
 
+> **小秘书无 OCR 版（分支 `feature/assistant-no-ocr`）**：在小秘书版基础上去掉 OCR。只读取电子版 PDF 自带的文字和 Word（.docx）正文，安装包里没有 OCR 模型和 OCR 运行库（rapidocr / onnxruntime）。关键词、Tag、检索、云盘合并、全文加密索引与小秘书版完全相同。扫描件 / 图片可以上传保存（可手填甲乙方、PIC、EIC 后合并到云盘），但没有正文和自动关键词：列表中显示「需上传 Word 版」，点行内「补充 Word 版」上传已识别文字的 .docx 后自动提取关键字。电子版 PDF 中个别扫描页会跳过并提示。打包结果为 `ContractOCR-Assistant-NoOCR-Windows-x64.zip`，自检脚本为 `native/smoke_nocr.py`。设置环境变量 `CONTRACT_OCR_OCR=on` 可在开发环境恢复 OCR 行为（用于 OCR 相关测试）。
+
 
 ## Windows 下载即用
 

@@ -57,33 +57,19 @@ Run $bp (@('-m', 'pip', 'install', '-r', 'requirements-native.txt', 'pyinstaller
 
 Step '3/8 （语义模型已移除，无需准备）'
 
-Step '4/8 准备 PP-OCRv5 OCR 模型（单独环境 .venv-models）'
-if (-not (Test-Path '.venv-models\Scripts\python.exe')) { Run $pyExe ($pyArgs + @('-m', 'venv', '.venv-models')) }
-$mp = (Resolve-Path '.venv-models\Scripts\python.exe').Path
-if ($RefreshModels -or -not (Test-Path 'models\ocr_models\ppocrv5_rec_server.onnx')) {
-    Run $mp (@('-m', 'pip', 'install', 'rapidocr==3.8.4', 'onnxruntime') + $pipMirror)
-    Run $mp @('native\fetch_ocr_models.py')
-} else { Write-Host '已存在，跳过下载。' }
-
-Step '5/8 生成 int8 检测模型（失败也不影响，程序会用原始检测模型）'
-try {
-    Run $mp (@('-m', 'pip', 'install', 'onnx', 'sympy', 'rapidocr_onnxruntime==1.4.4') + $pipMirror)
-    Run $mp @('tools\quantize_ocr.py', 'models\ocr_models', '--det-only')
-} catch { Write-Warning "int8 检测模型未生成：$($_.Exception.Message)" }
-
-Step '6/8 检查 OCR 模型能正常加载'
-Run $bp @('native\check_ocr_models.py')
+Step '4-6/8 （小秘书无 OCR 版：不下载、不量化、不检查 OCR 模型）'
 
 Step '7/8 用 PyInstaller 打包'
 Run $bp @('native\make_version_info.py', 'version_info.txt')
-$hidden = 'documents engine stamp_removal analysis_scope page_quality layout_quality recovery ocr_cache text_normalize date_review ocr_dictionary excel_table fulltext_index'.Split(' ')
+$hidden = 'documents word_text engine stamp_removal analysis_scope page_quality layout_quality recovery ocr_cache text_normalize date_review ocr_dictionary excel_table fulltext_index'.Split(' ')
 $piArgs = @('-m', 'PyInstaller', '--noconfirm', '--clean', '--onedir', '--name', 'ContractOCR',
     '--version-file', 'version_info.txt', '--noupx', '--paths', 'native')
 foreach ($m in $hidden) { $piArgs += @('--hidden-import', $m) }
-foreach ($p in 'rapidocr_onnxruntime onnxruntime pyclipper shapely pymupdf'.Split(' ')) { $piArgs += @('--collect-all', $p) }
-$piArgs += @('--add-data', 'models/ocr_models;ocr_models',
-    '--add-data', 'index.html;web', '--add-data', 'js;web/js', '--add-data', 'css;web/css',
-    '--add-data', 'assets;web/assets', '--add-data', 'lib;web/lib', 'native/desktop.py')
+foreach ($p in 'pymupdf'.Split(' ')) { $piArgs += @('--collect-all', $p) }
+# 打包环境里可能还装着旧版本用过的 OCR 运行库；明确排除，确保安装包里没有 OCR 模型和运行库。
+foreach ($x in 'rapidocr_onnxruntime rapidocr onnxruntime'.Split(' ')) { $piArgs += @('--exclude-module', $x) }
+$piArgs += @('--add-data', 'index.html;web', '--add-data', 'js;web/js', '--add-data', 'css;web/css',
+    '--add-data', 'assets;web/assets', '--add-data', 'lib/pdfjs;web/lib/pdfjs', 'native/desktop.py')
 Run $bp $piArgs
 $exe = Join-Path $Root 'dist\ContractOCR\ContractOCR.exe'
 if (-not (Test-Path $exe)) { throw '打包结束但没有找到 dist\ContractOCR\ContractOCR.exe' }
@@ -108,12 +94,12 @@ foreach ($bundled in Get-ChildItem 'dist\ContractOCR' -Recurse -File | Where-Obj
 
 Step '8/8 自检并压缩'
 if (-not $SkipSmokeTest) {
-    Run $bp @('native\smoke_windows.py', $exe)
+    Run $bp @('native\smoke_nocr.py', $exe)
     if (Test-Path 'packaged-validation.json') { Copy-Item 'packaged-validation.json' 'dist\ContractOCR\validation_report.json' -Force }
 } else { Write-Host '已跳过 EXE 自检。' }
 Copy-Item 'README.md' 'dist\ContractOCR\README.md' -Force
 if (-not $NoZip) {
-    $zip = Join-Path $Root 'ContractOCR-Assistant-Windows-x64.zip'
+    $zip = Join-Path $Root 'ContractOCR-Assistant-NoOCR-Windows-x64.zip'
     if (Test-Path $zip) { Remove-Item $zip -Force }
     Compress-Archive -Path 'dist\ContractOCR' -DestinationPath $zip
     $hash = (Get-FileHash $zip -Algorithm SHA256).Hash

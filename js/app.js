@@ -162,6 +162,7 @@ const App = (() => {
       const area=document.getElementById('myContracts'),input=document.getElementById('fileInput'),button=document.getElementById('uploadBtn');
       button.addEventListener('click',()=>{if(!input.disabled)input.click();});
       input.addEventListener('change',e=>{handleFiles(Array.from(e.target.files),'other');e.target.value='';});
+      document.getElementById('wordFileInput').addEventListener('change',e=>{attachWord(e.target.files[0]);e.target.value='';});
       const hasFiles=e=>[...(e.dataTransfer?.types||[])].includes('Files');
       area.addEventListener('dragover',e=>{if(!hasFiles(e)||input.disabled)return;e.preventDefault();area.classList.add('dragover');});
       area.addEventListener('dragleave',e=>{if(!area.contains(e.relatedTarget))area.classList.remove('dragover');});
@@ -249,10 +250,11 @@ const App = (() => {
   let activeJobs = 0;
   const MAX_JOBS = 2;
   function handleFiles(files, uploadCategory='other') {
-    const mode = document.getElementById('ocrMode').value;
+    const mode = document.getElementById('ocrMode')?.value || 'balanced';
     if (typeof NativeDocuments === 'undefined' || !NativeDocuments.available()) showToast('当前是浏览器备用版：单线程识别、较慢，且不使用多进程提速和 PP-OCRv5 手写模型。请双击 ContractOCR.exe 使用原生版。', 'warning');
     for (const file of files) {
-      if (!(/\.pdf$/i.test(file.name) || /^image\//.test(file.type))) continue;
+      if (!(/\.(pdf|docx)$/i.test(file.name) || /^image\//.test(file.type))) { showToast(`「${file.name}」不支持：请上传 PDF、Word（.docx）或图片`, 'warning'); continue; }
+      if (/\.docx$/i.test(file.name) && !(typeof NativeDocuments !== 'undefined' && NativeDocuments.available())) { showToast('Word 文件需要在桌面版中上传', 'warning'); continue; }
       const card = createResultCard(file, jobs.length, jobs.length + 1, uploadCategory);
       card.setStatus('processing', '排队等待识别');
       document.getElementById('parseResults').appendChild(card.element);
@@ -417,7 +419,7 @@ const App = (() => {
         id: result.id || Storage.generateId(), ...result.extracted,
         uploadCategory:job.uploadCategory||result.uploadCategory||'other',
         sourceFile: file.name, fileSize: file.size, pageCount: result.pageCount,
-        ocrUsed: result.ocrUsed || false, rawText: result.rawText || '',
+        ocrUsed: result.ocrUsed || false, rawText: result.rawText || '', textMissing: !!result.textMissing, textSource: result.textSource || null,
         pageAudit: result.pageAudit || [], layoutPages: result.layoutPages || [], sourceAvailable: result.sourceAvailable || false,
         analysisStatus:result.analysisStatus||(NativeDocuments.available()?'queued':'done'),ocrCacheHit:!!result.ocrCacheHit,originalRecognitionSeconds:result.originalRecognitionSeconds,
         semanticTags: result.semanticTags || [], semanticModel: result.semanticModel || null, semanticNote: result.semanticNote || '',
@@ -435,11 +437,13 @@ const App = (() => {
       try{await DomainCatalog.learn(contracts);}catch(e){showToast("合同已保存，服务领域库同步失败："+e.message,"warning");}
       DocumentView.remember(contract.id, file);
       job.state = 'done';
-      card.setStatus('success', `识别完成 · ${ocrTimingLabel(contract)} · ${cardAnalysisLabel(contract)}${result.ocrUsed ? ' · OCR' : ' · 文本提取'}${result.failedPages?.length ? ' · 失败页：'+result.failedPages.join('、') : ''}${result.resumedPages ? ' · 复用 '+result.resumedPages+' 页' : ''}`, result.extracted, contract.id);
+      card.setStatus('success', `识别完成 · ${ocrTimingLabel(contract)} · ${cardAnalysisLabel(contract)}${result.textMissing ? ' · 未读取正文（需补充 Word 版）' : result.textSource === 'word' ? ' · Word 正文' : result.ocrUsed ? ' · OCR' : ' · 文本提取'}${result.failedPages?.length ? ' · 失败页：'+result.failedPages.join('、') : ''}${result.resumedPages ? ' · 复用 '+result.resumedPages+' 页' : ''}`, result.extracted, contract.id);
       BusinessAnalysis.ensure(contracts);
       watchAnalysis();
       if(result.failedPages?.length && job.remoteId)card.setRetryAction(()=>retryRemoteJob(job));
       if (result.ocrError) showToast(file.name + '：部分页面 OCR 失败，请复核全文', 'warning');
+      if (contract.textMissing) showToast(`「${file.name}」${NEED_WORD}`, 'warning');
+      else if ((result.reviewNotes||[]).some(n=>/扫描页/.test(n.message||''))) showToast(`「${file.name}」中有扫描页未读取文字；如需这些页的内容，请补充 Word 版`, 'warning');
       updateContractCount();
       renderTable();
       refreshVisibleVault();
@@ -542,8 +546,12 @@ const App = (() => {
     if(!filter)return contracts;
     return contracts.filter(c=>{const p=listProfile(c);return [c.projectName,c.partyA,c.partyB,c.content,c.deliverables,c.sourceFile,c.rawText,c.uploadedByName,c.engagementName,...(p.keywords||[]),...(p.systems||[]),p.pic,p.eic].filter(Boolean).join(' ').toLowerCase().includes(filter);});
   }
+  // 无 OCR 版：扫描件 / 图片没有正文，需补充 Word 版才会自动提取关键字
+  const textMissing=c=>!!c.textMissing||!String(c.rawText||'').trim();
+  const NEED_WORD='扫描件或图片：本版本不含 OCR，未读取正文。请上传已识别文字的 Word 版（.docx）才能自动提取关键字';
   function listColumns(c){
     const p=listProfile(c),keywords=p.keywords||[],shown=keywords.slice(0,6);
+    if(textMissing(c))return `<td class="kw-cell"><span class="need-word" title="${escapeHtml(NEED_WORD)}">需上传 Word 版</span></td>`+['pic','eic'].map(k=>`<td class="person-cell">${escapeHtml(p[k]||'-')}</td>`).join('');
     const chips=shown.length?shown.map(k=>`<span class="list-kw">${escapeHtml(k)}</span>`).join('')+(keywords.length>shown.length?`<span class="list-kw more">+${keywords.length-shown.length}</span>`:''):'<span class="list-kw-empty">-</span>';
     return `<td class="kw-cell" title="${escapeHtml(keywords.join('；'))}"><div class="list-kws">${chips}</div></td>`+['pic','eic'].map(k=>`<td class="person-cell">${escapeHtml(p[k]||'-')}</td>`).join('');
   }
@@ -612,6 +620,26 @@ const App = (() => {
   const ICON_VIEW='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
   const ICON_EDIT='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
   const ICON_DELETE='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+  const ICON_WORD='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M12 18v-6"/><path d="M9 15l3-3 3 3"/></svg>';
+  // 补充 Word 版：读取 .docx 正文（本机服务，不经 OCR），写入该合同并重新分析关键字
+  let wordTarget=null;
+  function pickWord(id){
+    if(needDesktop())return;
+    wordTarget=id;const input=document.getElementById('wordFileInput');input.value='';input.click();
+  }
+  async function attachWord(file){
+    const id=wordTarget;wordTarget=null;if(!id||!file)return;
+    if(!/\.docx$/i.test(file.name)){showToast('请选择 Word（.docx）文件；旧版 .doc 请先另存为 .docx','warning');return;}
+    try{
+      const response=await fetch('/api/docx-text',{method:'POST',headers:{...NativeDocuments.headers(),'Content-Type':'application/octet-stream','X-Filename':encodeURIComponent(file.name)},body:file});
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(result.error||('HTTP '+response.status));
+      if(!String(result.text||'').trim())throw new Error('Word 文件中没有正文文字');
+      await persistFullText(id,result.text,{textMissing:false,textSource:'word',wordFile:file.name});
+      renderTable();refreshVisibleVault();
+      showToast(`已补充 Word 版「${file.name}」，正在自动提取关键字`,'success');
+    }catch(error){showToast('补充 Word 版失败：'+error.message,'error');}
+  }
   function deleteContract(id){
     showConfirm('确定删除该合同记录？', async () => {
       await Storage.deleteContract(id);
@@ -643,6 +671,7 @@ const App = (() => {
         ${listColumns(c)}
         <td>
           <div class="row-actions">
+            ${textMissing(c)?`<button class="row-action-btn word" data-action="word" title="补充 Word 版：上传已识别文字的 .docx，自动提取关键字">${ICON_WORD}</button>`:''}
             <button class="row-action-btn" data-action="view" title="查看详情">${ICON_VIEW}</button>
             <button class="row-action-btn" data-action="edit" title="编辑合同信息、关键词、系统与标签">${ICON_EDIT}</button>
             <button class="row-action-btn danger" data-action="delete" title="删除">${ICON_DELETE}</button>
@@ -658,6 +687,7 @@ const App = (() => {
         if (action === 'view') openDetailModal(id);
         else if (action === 'edit') Vault.openEditor(id);
         else if (action === 'delete') deleteContract(id);
+        else if (action === 'word') pickWord(id);
       });
     });
 
@@ -1039,7 +1069,7 @@ const App = (() => {
   }
 
   // Persist first: a failed IndexedDB write must not change the analysis source.
-  async function persistFullText(id, text) {
+  async function persistFullText(id, text, extra = {}) {
     if (!text.trim()) throw new Error('全文不能为空');
     const index = contracts.findIndex(c => c.id === id);
     if (index < 0) throw new Error('合同已不存在，请刷新列表');
@@ -1058,6 +1088,7 @@ const App = (() => {
       businessReview: Object.fromEntries(Object.entries(existing.businessReview || {}).map(([code, review]) => [code, { ...review, status: '已识别' }])),
       auditPurposeNeedsReview: !!existing.auditPurpose
     };
+    Object.assign(updated, extra);
     updated.semanticTags=[];updated.analysisStatus=NativeDocuments.available()?'queued':'done';
     const saved=await Storage.updateContract(updated);
     contracts[index] = saved;

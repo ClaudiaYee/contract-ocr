@@ -20,6 +20,7 @@ from recovery import PageCheckpoint
 
 class RecoveryTests(unittest.TestCase):
     def setUp(self):
+        import documents as _documents; from unittest import mock as _mock; _ocr = _mock.patch.object(_documents, 'OCR_ENABLED', True); _ocr.start(); self.addCleanup(_ocr.stop)  # OCR 行为测试：无 OCR 版默认关闭
         self.tmp=tempfile.TemporaryDirectory();self.root=Path(self.tmp.name)
         self.previous=desktop.DATA_ROOT,desktop.DB_PATH
         desktop.DATA_ROOT=self.root/'data';desktop.DB_PATH=desktop.DATA_ROOT/'state.sqlite3'

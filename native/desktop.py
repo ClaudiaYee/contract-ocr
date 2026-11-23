@@ -103,7 +103,7 @@ def get_job(identifier):
     return JOB_SAVE_ERRORS.get(identifier) or get_record('jobs', identifier)
 
 
-OCR_RESULT_FIELDS = ['id','rawText','pageCount','ocrUsed','reviewNotes','engine','workerPid','workerPids','seconds','failedPages','resumedPages','peakWorkerMemoryMB','pageAudit','layoutPages','sourceAvailable','sourceNote','ocrCacheHit','originalRecognitionSeconds','semanticTags','analysisStatus','ocrModel','workerPids','ocrThreads','ocrWorkers','stageSeconds']
+OCR_RESULT_FIELDS = ['id','rawText','pageCount','ocrUsed','reviewNotes','engine','workerPid','workerPids','seconds','failedPages','resumedPages','peakWorkerMemoryMB','pageAudit','layoutPages','sourceAvailable','sourceNote','ocrCacheHit','originalRecognitionSeconds','semanticTags','analysisStatus','ocrModel','workerPids','ocrThreads','ocrWorkers','stageSeconds','textMissing','textSource']
 
 
 def job_result(job):
@@ -695,10 +695,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return self.respond(200 if result is not None else 404, result or {'error': 'Job not found'})
         if parsed.path in ['/api/excel/export', '/api/excel/parse', '/api/excel/cloud-merge', '/api/excel/cloud-search']:
             return self.excel(parsed.path)
-        if parsed.path in ['/api/jobs', '/api/contracts', '/api/config', '/api/analysis', '/api/business-analysis']:
+        if parsed.path in ['/api/jobs', '/api/contracts', '/api/config', '/api/analysis', '/api/business-analysis', '/api/docx-text']:
             return self.mutate(parsed.path)
         if parsed.path != '/api/ocr':
             return self.respond(404, {'error': 'Not found'})
+        from documents import OCR_ENABLED
+        if not OCR_ENABLED:
+            return self.respond(400, {'error': '本版本不含 OCR：请上传电子版 PDF 或 Word（.docx）'})
         try:
             length = int(self.headers.get('Content-Length', '0'))
             if not 0 < length <= MAX_BYTES:
@@ -797,6 +800,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             data = self.rfile.read(length)
             if len(data) != length:
                 return self.respond(400, {'error': 'Incomplete request'})
+            if path == '/api/docx-text':
+                # 补充 Word 版：只在本机读取 .docx 正文并返回文字，不保存文件
+                from word_text import docx_lines, WordError
+                try:
+                    lines = docx_lines(data)
+                except WordError as error:
+                    return self.respond(422, {'error': str(error)})
+                return self.respond(200, {'text': '\n'.join(lines), 'lines': len(lines)})
             if path == '/api/jobs':
                 with JOB_LOCK:
                     from documents import recognize_document
@@ -981,7 +992,8 @@ def main():
             try:queue_analysis(server,contract['id'])
             except Exception:
                 pass  # 重新分析失败不影响启动，原结果保留，可在详情页重新分析
-    print(f'合同识别 {VERSION}：正在启动本机OCR引擎，首次识别稍需等待。')
+    from documents import OCR_ENABLED
+    print(f'合同识别 {VERSION}：' + ('正在启动本机OCR引擎，首次识别稍需等待。' if OCR_ENABLED else '小秘书版（不含 OCR）：读取电子版 PDF 与 Word 正文。'))
     print(f'打开 http://{HOST}:{PORT}；所有文件均在本机处理。关闭此窗口可停止服务。')
     if '--no-browser' not in sys.argv:
         webbrowser.open(f'http://{HOST}:{PORT}')

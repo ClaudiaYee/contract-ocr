@@ -111,5 +111,15 @@ for(const removed of ['#demo-editAmount','#demo-editEnterpriseSize','#demo-editF
 for(const id of ['#demo-add-keywords','#demo-add-services','#demo-add-specificTags','#demo-generateTags','#demo-extractKeywords','#demo-keywordsEditor button','#demo-specificTagsEditor button','#demo-servicesEditor button'])assert.equal(await p.locator(id).count(),0,id+' must be read-only');await p.locator('#demo-add-systems').fill('Workday');await p.locator('#demo-add-systems').press('Enter');
 await p.locator('#demo-editorForm [type=submit]').click();await p.locator('#demo-editorDialog').waitFor({state:'hidden'});
 const edited=await p.evaluate(async()=>(await Storage.getAllContracts()).find(c=>c.id==='a1'));assert(edited.knowledgeProfile.systems.includes('Workday'));assert.equal(edited.uploadedByName,me);
+// 无 OCR 版：扫描件没有正文 → 显示「需上传 Word 版」；补充 Word 版后自动提取关键字
+await p.evaluate(async()=>{await Storage.addContract({id:'scan1',projectName:'示例丙公司扫描件',partyA:'示例丙公司',signDate:'2026-03-01',rawText:'',textMissing:true,textSource:'none',knowledgeProfile:{pic:'赵六',eic:'王五',tagSchemaVersion:3},createdAt:Date.now()});});
+await p.reload();await p.waitForFunction(()=>window.__CONTRACT_OCR_READY);await p.locator('[data-view="upload"]').click();
+const scanRow=p.locator('#contractTableBody tr[data-id="scan1"]');await scanRow.waitFor();
+assert((await scanRow.locator('.need-word').innerText()).includes('需上传 Word 版'));
+const [chooser]=await Promise.all([p.waitForEvent('filechooser'),scanRow.locator('[data-action="word"]').click()]);
+await chooser.setFiles(path.join(__dirname,'fixtures','synthetic_contract.docx'));
+await toast(p,'已补充 Word 版');
+await p.waitForFunction(()=>{const row=document.querySelector('#contractTableBody tr[data-id="scan1"]');return row&&!row.querySelector('.need-word')&&!row.querySelector('[data-action="word"]')&&/SOX|ITGC/.test(row.querySelector('.kw-cell').textContent);},null,{timeout:30000});
+const filled=await p.evaluate(async()=>(await Storage.getAllContracts()).find(c=>c.id==='scan1'));assert(filled.rawText.includes('ITGC'));assert.equal(filled.textMissing,false);assert.equal(filled.textSource,'word');
 assert.deepEqual(errs,[]);console.log('ALL PASS');
 }catch(error){console.error(logs.slice(-3000));throw error;}finally{await b.close();s.kill();}})().catch(e=>{console.error(e);process.exit(1)});

@@ -18,6 +18,7 @@ from documents import recognize_document
 
 class DocumentLayoutTests(unittest.TestCase):
     def setUp(self):
+        import documents as _documents; from unittest import mock as _mock; _ocr = _mock.patch.object(_documents, 'OCR_ENABLED', True); _ocr.start(); self.addCleanup(_ocr.stop)  # OCR 行为测试：无 OCR 版默认关闭
         self.temporary = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary.name)
         self.previous = desktop.DATA_ROOT, desktop.DB_PATH

@@ -7,6 +7,44 @@ import unicodedata
 import time
 
 
+# 无 OCR 版（小秘书端）：只读取电子版 PDF 的文字层和 Word（.docx）正文，不加载、不运行任何 OCR 模型。
+# 扫描件 / 图片仍可保存，但没有正文和自动关键词，提示用户补充 Word 版。
+OCR_ENABLED = os.environ.get('CONTRACT_OCR_OCR', 'off') == 'on'
+NO_TEXT_NOTE = '这是扫描件或图片，本版本不含 OCR，未读取正文，也无法自动提取关键字。请上传已识别文字的 Word 版（.docx），或在「我的合同」中点「补充 Word 版」。'
+SCAN_PAGE_NOTE = '本页是扫描页，本版本不含 OCR，未读取本页文字；如需本页内容，请补充 Word 版。'
+
+
+def word_result(data, started):
+    """A .docx contract as one text page, in the same result shape as a PDF."""
+    from word_text import docx_lines
+    from recovery import peak_memory_mb
+    texts = docx_lines(data)
+    lines = [{'text': t, 'x0': 0, 'y0': i * 20, 'x1': max(1, len(t)) * 12, 'y1': i * 20 + 16} for i, t in enumerate(texts)]
+    text = '\n'.join(texts)
+    notes = [] if text.strip() else [{'page': 1, 'message': 'Word 文件中没有正文文字'}]
+    audit = {'page': 1, 'characters': len(re.sub(r'\s+', '', text)), 'lines': len(lines), 'lowScoreLines': 0, 'state': 'Word 正文' if text.strip() else '无文字',
+             'issues': [], 'retried': False, 'nearBlank': not text.strip(), 'seconds': round(time.perf_counter() - started, 3), 'ocrModels': []}
+    return {'ocrModel': None, 'failedPages': [], 'resumedPages': 0, 'peakWorkerMemoryMB': peak_memory_mb(), 'pageAudit': [audit],
+            'layoutPages': [{'page': 1, 'width': 1000, 'height': max(1, len(lines)) * 20, 'lines': lines, 'rawStart': 0, 'rawEnd': len(text)}],
+            'rawText': text, 'pageCount': 1, 'ocrUsed': False, 'textSource': 'word', 'textMissing': not text.strip(), 'reviewNotes': notes, 'engine': 'native',
+            'workerPid': os.getpid(), 'seconds': time.perf_counter() - started, 'semanticTags': [], 'analysisStatus': 'queued'}
+
+
+def image_without_ocr(data, started):
+    from PIL import Image, ImageOps
+    import io
+    from recovery import peak_memory_mb
+    with Image.open(io.BytesIO(data)) as image:
+        image = ImageOps.exif_transpose(image)
+        width, height = image.width, image.height
+    audit = {'page': 1, 'characters': 0, 'lines': 0, 'lowScoreLines': 0, 'state': '图片（未识别）', 'issues': ['本版本不含 OCR'], 'retried': False,
+             'nearBlank': False, 'seconds': round(time.perf_counter() - started, 3), 'ocrModels': []}
+    return {'ocrModel': None, 'failedPages': [], 'resumedPages': 0, 'peakWorkerMemoryMB': peak_memory_mb(), 'pageAudit': [audit],
+            'layoutPages': [{'page': 1, 'width': width, 'height': height, 'lines': [], 'rawStart': 0, 'rawEnd': 0}], 'rawText': '', 'pageCount': 1,
+            'ocrUsed': False, 'textSource': 'none', 'textMissing': True, 'reviewNotes': [{'page': 1, 'message': NO_TEXT_NOTE}], 'engine': 'native',
+            'workerPid': os.getpid(), 'seconds': time.perf_counter() - started, 'semanticTags': [], 'analysisStatus': 'queued'}
+
+
 def check_cancelled(progress_path):
     if Path(progress_path).with_suffix('.cancel').exists():
         raise RuntimeError('TASK_CANCELLED')
@@ -33,12 +71,20 @@ def progress(path, current, total, phase):
 
 
 def recognize_document(input_path, filename, mode, progress_path, upload_category='other'):
-    import pymupdf as fitz
-    from engine import recognize_image
     check_cancelled(progress_path)
     data = Path(input_path).read_bytes()
     started = time.perf_counter()
     notes = []
+    if filename.lower().endswith('.docx'):
+        progress(progress_path, 0, 1, '读取 Word 正文')
+        result = word_result(data, started)
+        progress(progress_path, 1, 1, 'Word 正文读取完成')
+        return result
+    if not filename.lower().endswith('.pdf') and not OCR_ENABLED:
+        progress(progress_path, 1, 1, '图片已保存（本版本不含 OCR）')
+        return image_without_ocr(data, started)
+    import pymupdf as fitz
+    from engine import recognize_image
     from recovery import peak_memory_mb
     from layout_quality import arrange, small_text_regions, supplement
     from page_quality import visual_signal, audit_page, coverage_signal
@@ -108,7 +154,10 @@ def assemble_pdf(outcomes,progress_path,started,peak_memory,worker_pids):
         pages.append(result['text']);layout_pages.append(result['layout']);page_audit.append(result['audit'])
         notes.extend(result['notes']);used_ocr=used_ocr or result['ocrUsed']
     full_text = '\n\n'.join(pages)
-    if not failures and not full_text.strip() and not all(row['nearBlank'] for row in page_audit):
+    text_missing = not full_text.strip()
+    if text_missing and not OCR_ENABLED:
+        notes = [{'page': None, 'message': NO_TEXT_NOTE}] + [n for n in notes if n['message'] != SCAN_PAGE_NOTE]
+    elif not failures and not full_text.strip() and not all(row['nearBlank'] for row in page_audit):
         raise ValueError('整份文件未识别到文字；存在可见内容的页码：' + '、'.join(str(row['page']) for row in page_audit if not row['nearBlank']))
     check_cancelled(progress_path)
     pids=[pid for pid in dict.fromkeys(worker_pids) if pid]
@@ -116,7 +165,7 @@ def assemble_pdf(outcomes,progress_path,started,peak_memory,worker_pids):
     stages={}
     for row in page_audit:
         for key,value in (row.get('stageSeconds') or {}).items():stages[key]=round(stages.get(key,0)+value,2)
-    return {'stageSeconds':stages or None,'ocrModel':' + '.join(models) if models else None,'failedPages':failures,'resumedPages':resumed_pages,'peakWorkerMemoryMB':peak_memory,'pageAudit': page_audit, 'layoutPages': layout_pages, 'rawText': full_text, 'pageCount': len(pages), 'ocrUsed': used_ocr, 'reviewNotes': notes, 'engine': 'native', 'workerPid': pids[0] if pids else os.getpid(), 'workerPids': pids, 'ocrThreads': int(os.environ.get('CONTRACT_OCR_THREADS') or 0) or None, 'seconds': time.perf_counter() - started, 'semanticTags':[], 'analysisStatus':'queued'}
+    return {'textMissing':text_missing,'textSource':'pdf-text' if not OCR_ENABLED else 'ocr','stageSeconds':stages or None,'ocrModel':' + '.join(models) if models else None,'failedPages':failures,'resumedPages':resumed_pages,'peakWorkerMemoryMB':peak_memory,'pageAudit': page_audit, 'layoutPages': layout_pages, 'rawText': full_text, 'pageCount': len(pages), 'ocrUsed': used_ocr, 'reviewNotes': notes, 'engine': 'native', 'workerPid': pids[0] if pids else os.getpid(), 'workerPids': pids, 'ocrThreads': int(os.environ.get('CONTRACT_OCR_THREADS') or 0) or None, 'seconds': time.perf_counter() - started, 'semanticTags':[], 'analysisStatus':'queued'}
 
 
 def recognize_page_task(input_path,page_no,mode,progress_path,digest):
@@ -248,6 +297,26 @@ def key_line_review(page,lines,mode,progress_path,models):
     return len(readings),adopted
 
 
+def pdf_text_page(page, page_no, text, scan, page_clock):
+    """No-OCR page: text layer only (images inside the page are not read)."""
+    import pymupdf as fitz
+    from text_normalize import fix_cjk
+    from layout_quality import arrange
+    from page_quality import visual_signal, audit_page
+    lines = [] if scan else [{'text': fix_cjk(''.join(span['text'] for span in line['spans'])), 'x0': line['bbox'][0], 'y0': line['bbox'][1], 'x1': line['bbox'][2], 'y1': line['bbox'][3]}
+             for block in page.get_text('dict', flags=fitz.TEXTFLAGS_DICT & ~fitz.TEXT_PRESERVE_IMAGES)['blocks'] if block.get('type') == 0
+             for line in block.get('lines', []) if any(span['text'].strip() for span in line['spans'])]
+    lines, page_text, structure = arrange(lines, page.rect.width, page.rect.height)
+    signal = visual_signal(page.get_pixmap(matrix=fitz.Matrix(.5, .5), alpha=False).tobytes('png'))
+    audit = {**audit_page(page_no, lines, signal), **structure, 'ocrModels': [], 'stageSeconds': {'text': round(time.perf_counter() - page_clock, 3)}}
+    notes = []
+    if scan and not signal['nearBlank']:
+        audit['state'] = '扫描页（未识别）'; audit['issues'] = ['本版本不含 OCR']
+        notes.append({'page': page_no, 'message': SCAN_PAGE_NOTE})
+    layout = {'page': page_no, 'width': page.rect.width, 'height': page.rect.height, 'lines': lines, **structure}
+    return {'text': page_text, 'layout': layout, 'audit': audit, 'notes': notes, 'ocrUsed': False}
+
+
 def recognize_pdf_page(page,page_no,total,mode,progress_path,report=True):
     import pymupdf as fitz
     from engine import recognize_image,pixmap_array
@@ -263,6 +332,8 @@ def recognize_pdf_page(page,page_no,total,mode,progress_path,report=True):
     from text_normalize import fix_cjk
     text = fix_cjk(page.get_text('text'))
     scan = len(re.sub(r'\W+', '', text)) < 10
+    if not OCR_ENABLED:
+        return pdf_text_page(page, page_no, text, scan, page_clock)
     dpi = {'fast': 160, 'balanced': 220, 'fine': 300}.get(mode, 220)
     scale = min(dpi / 72, 4200 / max(page.rect.width, page.rect.height))
     if scan:
