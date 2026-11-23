@@ -161,6 +161,9 @@ def recognize_image(content, mode: str):
             image = ImageOps.exif_transpose(source).convert('RGB')
             # RapidOCR numpy inputs use BGR; compositing is handled by the browser canvas.
             array = np.asarray(image)[:, :, ::-1].copy()
+    # 去除红色公章 / 合同专用章（只处理印章形状的红色区域，红色正文保留），避免印章压字导致整行漏识别
+    from stamp_removal import remove_stamps
+    array, stamps_removed = remove_stamps(array)
     longest = {'fast': 1280, 'balanced': 1920, 'fine': 2560}.get(mode, 1920)
     from rapidocr_onnxruntime.ch_ppocr_det.utils import DetPreProcess
     detector = engine.text_det
@@ -178,5 +181,5 @@ def recognize_image(content, mode: str):
     rows = group_rows(items)
     items = [item for row in rows for item in row]
     return {'text': '\n'.join(' '.join(item['text'] for item in row) for row in rows), 'lines': items, 'items': items,
-            'seconds': round(time.perf_counter() - started, 3), 'engine': 'native', 'ocrModel': LABELS[tag],
+            'seconds': round(time.perf_counter() - started, 3), 'engine': 'native', 'ocrModel': LABELS[tag], 'stampsRemoved': stamps_removed,
             'uncertain': [item for item in items if item['score'] < .8]}
