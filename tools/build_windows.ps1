@@ -2,7 +2,7 @@
 # 用法：在项目根目录双击「打包.bat」，或在 PowerShell 中运行：
 #   powershell -ExecutionPolicy Bypass -File tools\build_windows.ps1
 # 可选参数：
-#   -Mirror          国内网络：语义模型从 hf-mirror.com 下载，pip 使用清华镜像
+#   -Mirror          国内网络：pip 使用清华镜像
 #   -RefreshModels   重新下载模型（默认已下载过就跳过）
 #   -SkipSmokeTest   跳过打包后的 EXE 自检（更快）
 #   -NoZip           只生成 dist\ContractOCR 文件夹，不压缩 zip
@@ -55,10 +55,7 @@ $bp = (Resolve-Path '.venv-build\Scripts\python.exe').Path
 Run $bp (@('-m', 'pip', 'install', '--upgrade', 'pip') + $pipMirror)
 Run $bp (@('-m', 'pip', 'install', '-r', 'requirements-native.txt', 'pyinstaller==6.22.3') + $pipMirror)
 
-Step '3/8 准备语义模型（models\semantic_model）'
-if ($RefreshModels -or -not (Test-Path 'models\semantic_model\model_quantized.onnx')) {
-    Run $bp @('native\fetch_semantic_model.py')
-} else { Write-Host '已存在，跳过下载。' }
+Step '3/8 （语义模型已移除，无需准备）'
 
 Step '4/8 准备 PP-OCRv5 OCR 模型（单独环境 .venv-models）'
 if (-not (Test-Path '.venv-models\Scripts\python.exe')) { Run $pyExe ($pyArgs + @('-m', 'venv', '.venv-models')) }
@@ -79,12 +76,12 @@ Run $bp @('native\check_ocr_models.py')
 
 Step '7/8 用 PyInstaller 打包'
 Run $bp @('native\make_version_info.py', 'version_info.txt')
-$hidden = 'documents engine semantic page_quality layout_quality recovery ocr_cache text_normalize date_review ocr_dictionary excel_table'.Split(' ')
+$hidden = 'documents engine stamp_removal analysis_scope page_quality layout_quality recovery ocr_cache text_normalize date_review ocr_dictionary excel_table fulltext_index'.Split(' ')
 $piArgs = @('-m', 'PyInstaller', '--noconfirm', '--clean', '--onedir', '--name', 'ContractOCR',
     '--version-file', 'version_info.txt', '--noupx', '--paths', 'native')
 foreach ($m in $hidden) { $piArgs += @('--hidden-import', $m) }
-foreach ($p in 'rapidocr_onnxruntime onnxruntime pyclipper shapely pymupdf tokenizers'.Split(' ')) { $piArgs += @('--collect-all', $p) }
-$piArgs += @('--add-data', 'models/semantic_model;semantic_model', '--add-data', 'models/ocr_models;ocr_models',
+foreach ($p in 'rapidocr_onnxruntime onnxruntime pyclipper shapely pymupdf'.Split(' ')) { $piArgs += @('--collect-all', $p) }
+$piArgs += @('--add-data', 'models/ocr_models;ocr_models',
     '--add-data', 'index.html;web', '--add-data', 'js;web/js', '--add-data', 'css;web/css',
     '--add-data', 'assets;web/assets', '--add-data', 'lib;web/lib', 'native/desktop.py')
 Run $bp $piArgs

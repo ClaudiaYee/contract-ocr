@@ -104,14 +104,33 @@ const Extractor = (() => {
     if(company)v=company[0];
     return validParty(v,allowPerson)?v:'';
   }
+  const ORG_END=/(?:公司|事务所|大学|学院|银行|医院|委员会|研究院|中心|基金会|政府|分行|支行)$/;
+  // 单独出现时不像完整单位名称的开头：多为折行后的后半段。
+  const ORG_FRAGMENT=/^(?:(?:技术|科技|控股|股份|集团|有限|实业|发展|投资|信息|生物|电子|网络|软件|咨询|管理|服务|贸易|工程|医药|企业|智能|数据|新材料|能源|物流|电器|制药)|[（(](?:集团|中国|香港|上海|深圳|北京|广州)[)）])/;
+  function prefixFromPreviousLine(text,index,value){
+    const lineStart=text.lastIndexOf('\n',index-1)+1;
+    if(text.slice(lineStart,index).trim())return '';
+    const before=text.slice(0,lineStart).split('\n').map(x=>x.trim()).filter(Boolean);
+    const prev=before[before.length-1]||'';
+    if(!prev||prev.length>30||/[:：,，。;；、]|合同|协议|约定|签订|以下|地址|电话|日期|项目|甲方|乙方|双方|附件|第.{1,3}[页条]/.test(prev))return '';
+    if(!/^[\u4e00-\u9fffA-Za-z0-9（）()&·\s]+$/.test(prev)||ORG_END.test(prev))return '';
+    const joined=partyValue(prev.replace(/\s+/g,'')+value,false);
+    return joined&&joined.length>value.length?joined:'';
+  }
   function extractParty(text,keys,side){
     const fixed=String(text||'').replace(/([\u4e00-\u9fff])[ \t]+(?=[\u4e00-\u9fff])/g,'$1');
     const patterns=[new RegExp('(?:'+keys+')(?:[（(][^\n）)]{0,20}[）)])?\\s*[:：]\\s*([^\n]{1,100})','g'),new RegExp('[（(](?:'+keys+')[）)]\\s*[:：]?\\s*([^\n]{1,100})','g'),new RegExp('(?:'+keys+')\\s*(?:为|系|是)\\s*([^\n]{1,100})','g')];
     for(const re of patterns)for(const m of fixed.matchAll(re)){
-      const first=m[1].trim();let result=partyValue(first,true);if(result)return result;
+      const first=m[1].trim();let result=partyValue(first,true);
       // Join a wrapped legal name only, stopping before another labelled field.
       const next=fixed.slice(m.index+m[0].length).split('\n').filter(x=>x.trim()).slice(0,2);
-      for(const line of next){if(/[:：]|项目|合同|日期|地址|电话|联系人/.test(line))break;result=partyValue(first+line.trim(),false);if(result)return result;}
+      const joinNext=()=>{for(const line of next){if(/[:：]|项目|合同|日期|地址|电话|联系人/.test(line))break;const joined=partyValue(first+line.trim(),false);if(joined)return joined;}return '';};
+      // 「甲方：广东丸美生物」+ 下一行「技术股份有限公司」：名称被折行时优先拼成完整的单位名称。
+      if(result&&!ORG_END.test(result)){const joined=joinNext();if(joined&&ORG_END.test(joined))return joined;}
+      // 名称前半段排在标签上一行（表格中标签与第二行对齐）：「广东丸美生物」/「甲方：技术股份有限公司」。
+      if(result&&ORG_FRAGMENT.test(result)){const prefixed=prefixFromPreviousLine(fixed,m.index,result);if(prefixed)return prefixed;}
+      if(result)return result;
+      result=joinNext();if(result)return result;
     }
     const alias=side==='A'?'甲方|贵公司|客户':'乙方|我们|本所';
     const re=new RegExp('([^\n，。；:：]{2,95}(?:公司|事务所|银行|大学|学院|医院))\\s*[（(][^\n）)]{0,14}(?:'+alias+')[^\n）)]{0,14}[）)]','g');
@@ -203,14 +222,26 @@ const Extractor = (() => {
     return{value:'',source:'unresolved',evidence:''};
   }
   function extractProjectName(text,keywords,options){return extractProjectNameDetailed(text,keywords,options).value;}
+  // v4：折行的单位名称（「技术股份有限公司」只取到后半段）。只把旧值替换为包含它的完整名称，不改其他结果。
+  function repairWrappedParties(contract){
+    if(contract.identityExtractionVersion!==3||contract.manualFieldsEditedAt)return contract;
+    const next={...contract,identityExtractionVersion:4};
+    for(const[field,extract]of [['partyA',extractPartyA],['partyB',extractPartyB]]){
+      const old=contract[field]||'',found=extract(contract.rawText||'');
+      if(old&&found&&found!==old&&found.length>old.length&&found.includes(old))next[field]=found;
+    }
+    if(next.partyA!==contract.partyA||next.partyB!==contract.partyB)next.previousAutomaticIdentity={projectName:contract.projectName||'',partyA:contract.partyA||'',partyB:contract.partyB||''};
+    return next;
+  }
   function repairIdentity(contract){
-    if(contract.identityExtractionVersion===3||contract.manualFieldsEditedAt)return contract;
+    if(contract.identityExtractionVersion===3)return repairWrappedParties(contract);
+    if(contract.identityExtractionVersion>=4||contract.manualFieldsEditedAt)return contract;
     const title=extractProjectNameDetailed(contract.rawText||'',undefined,{preferSubject:contract.uploadCategory==='ey-template'});const next={...contract};let changed=false;
     const filename=String(contract.sourceFile||'').replace(/\.[^.]+$/,'');
     if(title.value&&(!contract.projectName||contract.projectName==='未识别项目'||contract.projectName===filename||(contract.uploadCategory==='ey-template'&&title.source==='subject'&&['explicit','cover','subject','unresolved'].includes(contract.projectNameSource)))){next.projectName=title.value;next.projectNameSource=title.source;next.projectNameEvidence=title.evidence;changed=true;}
     for(const[field,extract]of [['partyA',extractPartyA],['partyB',extractPartyB]])if(!validParty(contract[field],true)){const found=extract(contract.rawText||'');if(found!==(contract[field]||'')){next[field]=found;changed=true;}}
     if(!changed)return contract;
-    return{...next,identityExtractionVersion:3,previousAutomaticIdentity:{projectName:contract.projectName||'',partyA:contract.partyA||'',partyB:contract.partyB||''}};
+    return{...next,identityExtractionVersion:4,previousAutomaticIdentity:{projectName:contract.projectName||'',partyA:contract.partyA||'',partyB:contract.partyB||''}};
   }
 
   // 提取签约时间
@@ -395,7 +426,7 @@ const Extractor = (() => {
 
     const projectIdentity=extractProjectNameDetailed(cleanedText,config.projectKeys,options);
     const result = {
-      identityExtractionVersion:3,projectNameSource:projectIdentity.source,projectNameEvidence:projectIdentity.evidence,
+      identityExtractionVersion:4,projectNameSource:projectIdentity.source,projectNameEvidence:projectIdentity.evidence,
       partyA: extractPartyA(cleanedText, config.partyAKeys),
       partyB: extractPartyB(cleanedText, config.partyBKeys),
       projectName: projectIdentity.value,
